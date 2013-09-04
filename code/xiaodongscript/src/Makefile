@@ -1,5 +1,5 @@
-EXE = ../getcor ../select_obj ../post_proc
-OBJS = getcor.o select_obj.o post_proc.o
+EXE = ../getcor ../select_obj ../post_proc ../post_proc_BDMW ../calc_grad_chisqs
+OBJS = getcor.o select_obj.o post_proc.o post_proc_BDMW.o ap_tools.o  ap_mu_tools.o ap_cosmo_funs.o ap_settings_init.o ap_smooth.o ap_grad_fields.o ap_main.o ap_chisq.o
 F90C = ifort
 F90FLAGS = 
 
@@ -9,6 +9,20 @@ $(EXE): $(OBJS)
 	$(F90C) -o ../getcor getcor.o
 	$(F90C) -o ../select_obj select_obj.o
 	$(F90C) -o ../post_proc post_proc.o
+	$(F90C) -o ../post_proc_BDMW post_proc_BDMW.o
+	$(F90C) -o ../calc_grad_chisqs ap_tools.o ap_mu_tools.o ap_cosmo_funs.o ap_settings_init.o ap_smooth.o ap_grad_fields.o ap_chisq.o ap_main.o 
+
+ap_cosmo_funs.o: ap_tools.o
+ap_mu_tools.o: ap_tools.o
+ap_settings_init.o: ap_cosmo_funs.o 
+ap_smooth.o: ap_settings_init.o
+ap_grad_fields.o: ap_smooth.o ap_mu_tools.o
+ap_chisq.o: ap_grad_fields.o
+ap_main.o:  ap_chisq.o
+#ap_main.o: ap_settings_init.o
+#ap_main.o: ap_tools.o
+#ap_main.o: ap_cosmo_funs.o
+
 
 %.o: %.f90
 	$(F90C) -c $*.f90 $(F90FLAGS)
