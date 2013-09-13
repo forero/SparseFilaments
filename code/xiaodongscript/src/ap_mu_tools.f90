@@ -84,6 +84,7 @@ contains
 			do i = 1, num_bins
 				!hist_er_list(i) = hist_list(i) / sqrt(hist_list(i) - 1.0_dl)
 				hist_er_list(i) = sqrt(hist_list(i)*(1.0_dl-hist_list(i)/(m+0.0)) )
+!				hist_er_list(i) = sqrt(n/(num_bins+0.0))*(1.0_dl-(1/(num_bins+0.0)) )
 !				hist_er_list(i) = sqrt(hist_list(i)*(1.0_dl-hist_list(i)/(m+0.0)) )
 
 			enddo

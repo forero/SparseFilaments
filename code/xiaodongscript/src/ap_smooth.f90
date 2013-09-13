@@ -22,6 +22,7 @@ use ap_settings_init
 	integer :: num_xyz_mass
 	real(dl), allocatable :: xyz_list(:,:), mass_list(:), bf_mass_list(:), r_list(:)
 	real(dl) :: xmin, xmax, ymin, ymax, zmin, zmax
+	real(dl) :: gbrmin, gbrmax, gbtotvol
 	real(dl) :: unit_len
 	integer :: n_cellx, n_celly, n_cellz
 	real(dl) :: deltax, deltay, deltaz
@@ -34,6 +35,12 @@ use ap_settings_init
 	
 	! array containing which halo in which cell
 	type(halo_list), allocatable :: cell_mat(:,:,:)
+	
+	type :: pixelinfo
+		real(dl), allocatable :: xyzrlist(:,:)
+		integer, allocatable :: indexlist(:)
+		real(dl) :: maxdist
+	end type	
 	
 contains
 
@@ -182,6 +189,9 @@ contains
 			ymin = min(ymin,y); ymax = max(ymax,y)
 			zmin = min(zmin,z); zmax = max(zmax,z)
 		enddo
+		!min/max of r
+		call find_min_max(r_list, num_halo, gbrmin, gbrmax)
+		gbtotvol = vol_fun(gbrmin, gbrmax)
 		
 		if(print_info) then
 			write(*,'(2x,A,f10.5,2x,f10.5)')  '  xmin / xmax = ', xmin, xmax
@@ -324,104 +334,271 @@ contains
   		z = zmin + (iz-0.5)*deltaz
 	end subroutine cell_pos
 
+
   !------------------------------------------
   ! estimating rho and gradient rho based on
   !  cubic spline kernel
   !------------------------------------------
-  	subroutine nb_list(x,y,z,num,rho,drhodx,drhody,drhodz,max_dist,gv_index_array,gv_xyzrarray,actionisoutput)
+  	subroutine nb_list0(x,y,z,num,rho,drhodx,drhody,drhodz,max_dist)
+		! DUMMY ARGUMENTS
   		real(dl), intent(in) :: x,y,z
   		integer, intent(in) :: num
   		real(dl), intent(out) :: rho,drhodx,drhody,drhodz,max_dist
+  		! LOCAL VARIABLES
   		integer, allocatable :: index_array(:)
-  		real(dl), allocatable :: distance_array(:), xyz_mass_array(:,:)
-  		integer :: i,n
+  		real(dl), allocatable :: distance_array(:), xyz_mass_array(:,:), tmp(:), smda(:)
+  		integer, allocatable :: tmpindex(:), smlablist(:)
+  		integer :: i,j,n,nowindex
   		real(dl) :: h, r0(3), r, mass, dweight
-!  		logical, optional :: hh !lxd
-  		integer, allocatable, optional :: gv_index_array(:)
-  		real(dl), allocatable, optional :: gv_xyzrarray(:,:)
-  		logical, optional :: actionisoutput
 
-		! check length of the given index, xyz_distance arrays  		
-  		if(present(gv_xyzrarray) .or. present(gv_index_array) .or. present(actionisoutput)) then
-  			if(.not. present(gv_index_array) .or. .not. present(gv_xyzrarray) .or. .not. present(actionisoutput)) then
-  				print *, 'ERROR! Index array, xyzr array, index_xyz_action shall be given together!'
-  				stop
-  			endif
-  		endif
-  		
-  		if(present(actionisoutput)) then
-  			if(.not.actionisoutput) then !use as iput!
-  				if(size(gv_xyzrarray,2) .ne. num .or. size(gv_index_array).ne.num) then
-  					print *, 'ERROR! Len of xyz_distance_array must be ', num
-  					stop
-  				endif
-  		
-  				max_dist = gv_xyzrarray(4,num)
-  				h = max_dist / 2.0
-				rho = 0; drhodx=0;drhody=0;drhodz=0;
-				do i = 1, num
-					r = gv_xyzrarray(4,i)
-					mass = mass_list(gv_index_array(i))
-					rho = rho + mass*w_kernel(r, h)
-					dweight = der_w_kernel(r,h)
-					drhodx = drhodx + mass*(x-gv_xyzrarray(1,i)) / r * dweight
-					drhody = drhody + mass*(y-gv_xyzrarray(2,i)) / r * dweight
-					drhodz = drhodz + mass*(z-gv_xyzrarray(3,i)) / r * dweight
-!				if(present(hh).and.hh) then
-!					print *, '   i,r,mass = ', i, r, mass
-!				endif
-				enddo	
-  				
-  				return
-  			else	
-  				if(.not.allocated(gv_index_array)) allocate(gv_index_array(num))
-  				if(.not.allocated(gv_xyzrarray)) allocate(gv_xyzrarray(4,num))
-  				if(size(gv_index_array).ne.num.or.size(gv_xyzrarray,1).ne.4.or.size(gv_xyzrarray,2).ne.num) then
-  					print*, 'ERROR (nb_list)! Check the size of xyzrarray, indexarray!'
-  					stop
-  				endif
-	  		endif	
-  		endif
-		
   		call nb_select(x,y,z,num,selected_list=index_array)
   		n=size(index_array)
-  		
-  		allocate(xyz_mass_array(5,n), distance_array(n))
-  		r0(1)=x; r0(2)=y; r0(3)=z;
-  		do i = 1, n
-  			xyz_mass_array(1:3,i) = xyz_list(1:3,index_array(i))
-  			xyz_mass_array(4,i) = mass_list(index_array(i))
-  			xyz_mass_array(5,i) = index_array(i)
-  			distance_array(i) = distance(xyz_mass_array(1:3,i),r0)
-!  			if(present(hh)) then
-! 				if(hh) then
-!				 print *, i, index_array(i), mass_list(index_array(i)), xyz_mass_array(4,i), distance_array(i)
-!  				endif
-! 			endif
-  		enddo
-  		call bubble_2d(xyz_mass_array,distance_array,num)
-  		max_dist = distance_array(num)
+
+  		allocate(tmpindex(n), distance_array(n))
+		r0(1)=x; r0(2)=y; r0(3)=z;
+		do i = 1, n
+			distance_array(i) = distance(xyz_list(1:3,index_array(i)),r0)
+			tmpindex(i) = index_array(i)
+		enddo
+
+		allocate(smlablist(num),smda(num))
+		call ltlablist2(distance_array,n,num,smda,smlablist)
+
+		allocate(xyz_mass_array(4,num))
+		
+		do i = 1, num
+			nowindex = tmpindex(smlablist(i))
+			xyz_mass_array(1:3,i) = xyz_list(1:3,nowindex)
+			xyz_mass_array(4,i) = mass_list(nowindex)
+!		  		print *, i, real(xyz_mass_array(1:5,i))
+ 		enddo
+
+  		max_dist = maxval(smda)
   		h = max_dist / 2.0
 		rho = 0; drhodx=0;drhody=0;drhodz=0;
 		do i = 1, num
-			r = distance_array(i)
+			r = distance_array(smlablist(i))
 			mass = xyz_mass_array(4,i)
 			rho = rho + mass*w_kernel(r, h)
 			dweight = der_w_kernel(r,h)
 			drhodx = drhodx + mass*(x-xyz_mass_array(1,i)) / r * dweight
 			drhody = drhody + mass*(y-xyz_mass_array(2,i)) / r * dweight
 			drhodz = drhodz + mass*(z-xyz_mass_array(3,i)) / r * dweight
+		enddo
+	end subroutine nb_list0
+
+  !------------------------------------------
+  ! estimating rho and gradient rho based on
+  !  cubic spline kernel
+  !------------------------------------------
+  	subroutine nb_listinput(x,y,z,num,rho,drhodx,drhody,drhodz,pixel)
+		! DUMMY ARGUMENTS
+  		real(dl), intent(in) :: x,y,z
+  		integer, intent(in) :: num
+  		real(dl), intent(out) :: rho,drhodx,drhody,drhodz
+  		type(pixelinfo), intent(in) :: pixel
+  		! LOCAL VARIABLES
+  		integer, allocatable :: index_array(:)
+  		real(dl), allocatable :: distance_array(:), xyz_mass_array(:,:), tmp(:), smda(:)
+  		integer, allocatable :: tmpindex(:), smlablist(:)
+  		integer :: i,j,n,nowindex
+  		real(dl) :: h, r0(3), r, mass, dweight
+  		
+		h = pixel%maxdist / 2.0
+		rho = 0; drhodx=0;drhody=0;drhodz=0;
+		do i = 1, num
+			r = pixel%xyzrlist(4,i)
+			mass = mass_list(pixel%indexlist(i))
+			rho = rho + mass*w_kernel(r, h)
+			dweight = der_w_kernel(r,h)
+			drhodx = drhodx + mass*(x-pixel%xyzrlist(1,i)) / r * dweight
+			drhody = drhody + mass*(y-pixel%xyzrlist(2,i)) / r * dweight
+			drhodz = drhodz + mass*(z-pixel%xyzrlist(3,i)) / r * dweight
+		enddo	
+	end subroutine nb_listinput	
+
+
+  !------------------------------------------
+  ! estimating rho and gradient rho based on
+  !  cubic spline kernel
+  !------------------------------------------
+  	subroutine nb_listoutput(x,y,z,num,rho,drhodx,drhody,drhodz,max_dist,pixel)
+		! DUMMY ARGUMENTS
+  		real(dl), intent(in) :: x,y,z
+  		integer, intent(in) :: num
+  		real(dl), intent(out) :: rho,drhodx,drhody,drhodz,max_dist
+  		type(pixelinfo), intent(out) :: pixel
+  		! LOCAL VARIABLES
+  		integer, allocatable :: index_array(:)
+  		real(dl), allocatable :: distance_array(:), xyz_mass_array(:,:), tmp(:), smda(:)
+  		integer, allocatable :: tmpindex(:), smlablist(:)
+  		integer :: i,j,n,nowindex
+  		real(dl) :: h, r0(3), r, mass, dweight
+
+		if(.not.allocated(pixel%indexlist)) allocate(pixel%indexlist(num))
+		if(.not.allocated(pixel%xyzrlist)) allocate(pixel%xyzrlist(4,num))
+
+  		call nb_select(x,y,z,num,selected_list=index_array)
+  		n=size(index_array)
+
+  		allocate(tmpindex(n), distance_array(n))
+		r0(1)=x; r0(2)=y; r0(3)=z;
+		do i = 1, n
+			distance_array(i) = distance(xyz_list(1:3,index_array(i)),r0)
+			tmpindex(i) = index_array(i)
+		enddo
+
+		allocate(smlablist(num),smda(num))
+		call ltlablist2(distance_array,n,num,smda,smlablist)
+
+		allocate(xyz_mass_array(4,num))
+		
+		do i = 1, num
+			nowindex = tmpindex(smlablist(i))
+			xyz_mass_array(1:3,i) = xyz_list(1:3,nowindex)
+			xyz_mass_array(4,i) = mass_list(nowindex)
+			!!! Save results to pixel
+			pixel%indexlist(i) = nowindex
+ 		enddo
+
+  		max_dist = maxval(smda)
+  		pixel%maxdist = max_dist
+  		h = max_dist / 2.0
+		rho = 0; drhodx=0;drhody=0;drhodz=0;
+		do i = 1, num
+			r = distance_array(smlablist(i))
+			mass = xyz_mass_array(4,i)
+			rho = rho + mass*w_kernel(r, h)
+			dweight = der_w_kernel(r,h)
+			drhodx = drhodx + mass*(x-xyz_mass_array(1,i)) / r * dweight
+			drhody = drhody + mass*(y-xyz_mass_array(2,i)) / r * dweight
+			drhodz = drhodz + mass*(z-xyz_mass_array(3,i)) / r * dweight
+			!!! Save results to pixel
+			pixel%xyzrlist(1:3,i) = xyz_mass_array(1:3,i)
+			pixel%xyzrlist(4,i) = r
+		enddo
+	end subroutine nb_listoutput
+
+
+  !------------------------------------------
+  ! estimating rho and gradient rho based on
+  !  cubic spline kernel
+  !------------------------------------------
+  	subroutine nb_list(x,y,z,num,rho,drhodx,drhody,drhodz,max_dist,pixel,acoutput)
+		! DUMMY ARGUMENTS
+  		real(dl), intent(in) :: x,y,z
+  		integer, intent(in) :: num
+  		real(dl), intent(out) :: rho,drhodx,drhody,drhodz,max_dist
+  		type(pixelinfo), optional :: pixel
+  		logical, optional :: acoutput
+  		! LOCAL VARIABLES
+  		integer, allocatable :: index_array(:)
+  		real(dl), allocatable :: distance_array(:), xyz_mass_array(:,:), tmp(:), smda(:)
+  		integer, allocatable :: tmpindex(:), smlablist(:)
+  		integer :: i,j,n,nowindex
+  		real(dl) :: h, r0(3), r, mass, dweight
+  		logical :: havepixel = .false.
+!  		logical, optional :: hh !lxd
+
+		! check length of the given index, xyz_distance arrays  		
+  		if(present(pixel) .or. present(acoutput)) then
+  			if(.not. present(pixel) .or. .not. present(acoutput)) then
+  				print *, 'ERROR! pixel, actionisoutput shall be given together!'
+  				stop
+  			endif
+  			havepixel = .true.
+  		endif
+  		
+  		if(havepixel) then
+  			if(.not.acoutput) then !use as iput!
+!  				if(size(pixel%xyzrarray,2) .ne. num .or. size(pixel%index_array).ne.num) then
+ ! 					print *, 'ERROR! Len of xyz_distance_array must be ', num
+  !					stop
+  !				endif
+  		
+  				max_dist = pixel%maxdist !gv_xyzrarray(4,num)
+  				h = max_dist / 2.0
+				rho = 0; drhodx=0;drhody=0;drhodz=0;
+				do i = 1, num
+					r = pixel%xyzrlist(4,i)
+					mass = mass_list(pixel%indexlist(i))
+					rho = rho + mass*w_kernel(r, h)
+					dweight = der_w_kernel(r,h)
+					drhodx = drhodx + mass*(x-pixel%xyzrlist(1,i)) / r * dweight
+					drhody = drhody + mass*(y-pixel%xyzrlist(2,i)) / r * dweight
+					drhodz = drhodz + mass*(z-pixel%xyzrlist(3,i)) / r * dweight
+!					print *, 'acinput: i, xyzr, index = ', pixel%xyzrlist(1:4,i), pixel%indexlist(i)
+!					print *, 'acinput: i, r, mass, rho, drhodx, drhody, drhodz = ', i, r, mass, rho, drhodx, drhody, drhodz
+!				if(present(hh).and.hh) then
+!					print *, '   i,r,mass = ', i, r, mass
+!				endif
+				enddo	
+!				print *, 'acinput: ', rho, drhodx, drhody, drhodz
+  				return
+  			else	
+  				if(.not.allocated(pixel%indexlist)) allocate(pixel%indexlist(num))
+  				if(.not.allocated(pixel%xyzrlist)) allocate(pixel%xyzrlist(4,num))
+!  				if(size(gv_index_array).ne.num.or.size(gv_xyzrarray,1).ne.4.or.size(gv_xyzrarray,2).ne.num) then
+! 					print*, 'ERROR (nb_list)! Check the size of xyzrarray, indexarray!'
+!  					stop
+! 				endif
+	  		endif	
+  		endif
+		
+  		call nb_select(x,y,z,num,selected_list=index_array)
+  		n=size(index_array)
+
+		! Use bubble sort rather than quick sort (only find out first num smallest elements)
+		!  But quick sort may be faster when num is large
+		
+  		allocate(tmpindex(n), distance_array(n))
+		r0(1)=x; r0(2)=y; r0(3)=z;
+		do i = 1, n
+			distance_array(i) = distance(xyz_list(1:3,index_array(i)),r0)
+			tmpindex(i) = index_array(i)
+		enddo
+
+		allocate(smlablist(num),smda(num))
+!		call ltlablist1(A=distance_array,nA=n,numsm=num,numtolin=0, &
+!				smlablist=smlablist,splist=smda)!,Aminout,Amaxout,markin)
+		call ltlablist2(distance_array,n,num,smda,smlablist)
+
+		allocate(xyz_mass_array(4,num))
+		
+		do i = 1, num
+			nowindex = tmpindex(smlablist(i))
+			xyz_mass_array(1:3,i) = xyz_list(1:3,nowindex)
+			xyz_mass_array(4,i) = mass_list(nowindex)
+!		  		print *, i, real(xyz_mass_array(1:5,i))
+ 		enddo
+
+  		max_dist = maxval(smda)
+  		h = max_dist / 2.0
+		rho = 0; drhodx=0;drhody=0;drhodz=0;
+		do i = 1, num
+			r = distance_array(smlablist(i))
+			mass = xyz_mass_array(4,i)
+			rho = rho + mass*w_kernel(r, h)
+			dweight = der_w_kernel(r,h)
+			drhodx = drhodx + mass*(x-xyz_mass_array(1,i)) / r * dweight
+			drhody = drhody + mass*(y-xyz_mass_array(2,i)) / r * dweight
+			drhodz = drhodz + mass*(z-xyz_mass_array(3,i)) / r * dweight
+!			print *, 'acoutput: i, r, mass, rho, drhodx, drhody, drhodz = ', i, r, mass, rho, drhodx, drhody, drhodz
 !			if(present(hh).and.hh) then
 !				print *, '   i,r,mass = ', i, r, mass
 !			endif
 		enddo
-		
-		if(present(actionisoutput)) then
-			gv_xyzrarray(1,1:num) = xyz_mass_array(1,1:num)
-			gv_xyzrarray(2,1:num) = xyz_mass_array(2,1:num)
-			gv_xyzrarray(3,1:num) = xyz_mass_array(3,1:num)
-			gv_xyzrarray(4,1:num) = distance_array(1:num)
-			gv_index_array(1:num) = int(xyz_mass_array(5,1:num))
+!		print *, 'acoutput: ', rho, drhodx, drhody, drhodz
+		if(havepixel) then
+			if(acoutput) then
+				do i = 1, num
+					pixel%xyzrlist(1:3,i) = xyz_mass_array(1:3,i)
+					pixel%xyzrlist(4,i) = distance_array(smlablist(i))
+					pixel%indexlist(i) = tmpindex(smlablist(i))
+					!print *, 'acoutput: i, xyzr, index = ', i, pixel%xyzrlist(1:4,i), pixel%indexlist(i)
+				enddo
+				pixel%maxdist = max_dist
+			endif
 		endif
 !		if(present(hh).and.hh) then!lxd
 !			print *, 'rho, drhodx, drhody, drhodz = ', rho, drhodx, drhody, drhodz

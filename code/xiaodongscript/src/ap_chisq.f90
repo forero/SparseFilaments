@@ -5,18 +5,6 @@ use ap_grad_fields
 implicit none
 
 	logical :: gb_chisq_initied = .false.
-	type :: chisq_settings
-		integer :: smnum, num_in_x
-		logical :: check_boundary = .true.
-		logical :: print_info = .false.
-		real(dl) :: cb_adjust_ratio = 1.0_dl, remov_dist_ratio = 1.0_dl
-		logical :: use_num_density = .true.
-		integer :: nbins_rhoav = 10
-		logical :: use_intpl_rho = .true.
-		logical :: has_RSD = .true.
-		integer, allocatable :: nbins_list(:)
-	end type
-	
 
 contains
 
@@ -24,12 +12,50 @@ contains
   !------------------------------------------
   ! calculating chisq based
   !------------------------------------------
-	  subroutine gradient_chisqs(omegam, w, h, cs, rho_chisqlist, delta_chisqlist, ndelta_chisqlist)
+	  subroutine random_chisqs(np, ndata, chisqlist, chisqmean, chisqvar, nbins, printinfo)
+	  	! DUMMy
+	  	integer :: np, ndata, nbins
+	  	real(dl) :: chisqlist(ndata), chisqmean, chisqabsmean, chisqvar
+	  	logical :: printinfo 
+	  	! LOCAL
+	  	integer :: i, idata, j, n
+	  	real(dl) :: mudata(np), x
+	  	
+	  	if(printinfo) print *, 'Totally ', ndata, 'steps...'
+	  	call random_seed()
+		do idata = 1, ndata
+		  	do i = 1, np
+		  		call random_number(x)
+		  		mudata(i) = x + x - 1.0
+		  	enddo
+		  	chisqlist(idata) = 0
+		  	j = 0
+		  	do n = 2, 5
+			  	chisqlist(idata) = chisqlist(idata) + chisq_of_mu_data(mudata, n)
+			 	j = j + 1
+			enddo
+			chisqlist(idata) = chisqlist(idata) / (j+0.0)
+!			chisqlist(idata) = chisq_of_mu_data(mudata, nbins)
+		  	if(mod(idata,max(ndata/20,1)).eq.0.and.printinfo) then
+			  	print *, '  step, chisq = ', idata, chisqlist(idata)
+			endif
+		  enddo
+		  call get_mean_var(chisqlist, chisqmean, chisqvar)
+		  if(printinfo) then
+		  	print *, 'Mean, var, sqrt(var) = ', real(chisqmean), real(chisqvar), real(sqrt(chisqvar))
+		  endif
+	  end subroutine random_chisqs
+
+  !------------------------------------------
+  ! calculating chisq based
+  !------------------------------------------
+	  subroutine gradient_chisqs(omegam, w, h, cs, rho_chisqlist, delta_chisqlist, ndelta_chisqlist, calc_comvr)
 		real(dl) :: omegam, w, h
 		type(chisq_settings) :: cs
 		integer :: i, j, n, RSD, AP, nbins
 		real(dl), allocatable :: drho_mu_data(:), ddelta_mu_data(:), dndelta_mu_data(:)
 		real(dl), intent(out) :: rho_chisqlist(:), delta_chisqlist(:), ndelta_chisqlist(:)
+		logical :: calc_comvr
 
 		if(.not.allocated(cs%nbins_list)) then
 			print *, 'ERROR! nbins_list as a mandatory setting must be provided!'
@@ -54,14 +80,16 @@ contains
 		gb_omegam 	= omegam
 		gb_w 		= w
 		gb_h 		= h
-		if (cs%print_info) then
-			print *, 'Estimating cosmology om, w = ', omegam, w
+		if(calc_comvr) then
+			if (cs%print_info) then
+				print *, 'Estimating cosmology omegam/w = ', real(omegam), real(w)
+			endif
+			call de_calc_comovr()
+			do i = 1, num_halo
+				halo_info(i)%r_AP(AP) = de_get_comovr(halo_info(i)%z_real)
+				halo_info(i)%r_AP_RSD(AP) = de_get_comovr(halo_info(i)%z_obs)
+			enddo
 		endif
-		call de_calc_comovr()
-		do i = 1, num_halo
-			halo_info(i)%r_AP(AP) = de_get_comovr(halo_info(i)%z_real)
-			halo_info(i)%r_AP_RSD(AP) = de_get_comovr(halo_info(i)%z_obs)
-		enddo
 
 		if(cs%has_RSD) then
 			RSD = 1
@@ -70,9 +98,7 @@ contains
 		endif
 
 		! get the mu_data
-		call grid_rho_delta_list(RSD, AP, cs%smnum, cs%num_in_x, cs%print_info, cs%check_boundary, cs%cb_adjust_ratio, cs%remov_dist_ratio, &
-			cs%use_num_density, cs%nbins_rhoav, cs%use_intpl_rho, &
-			drho_mu_data, ddelta_mu_data, dndelta_mu_data)
+		call grid_rho_delta_list(RSD, AP, cs, drho_mu_data, ddelta_mu_data, dndelta_mu_data)
 		
 		!get the chisqs
 		do i = 1, n
@@ -84,4 +110,4 @@ contains
 	end subroutine gradient_chisqs
 
 end module ap_chisq
-			
+		

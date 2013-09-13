@@ -22,6 +22,7 @@ use ap_cosmo_funs
 		!character(char_len), parameter :: halo_data_file = '../../../data/input/MD_fullhalos_z0_max160w.dat'
 		!character(char_len), parameter :: halo_data_file = '../../data/input/MD_fullhalos_z0_1000-1600_shell.dat'
 		character(char_len), parameter :: halo_data_file = '../../data/input/MD_fullhalos_z0_100w.dat'
+		!character(char_len), parameter :: halo_data_file = '../../data/input/MD_fullhalos_z0_330w.dat'
 	
 	!----------------------------------
 	! ( 2 ). Name of the project.	
