@@ -19,14 +19,14 @@ use ap_settings_init
 	
 ! nuisance settings	
 !	character(len=char_len) :: rho_gradient_file_name
-	integer :: num_xyz_mass
-	real(dl), allocatable :: xyz_list(:,:), mass_list(:), bf_mass_list(:), r_list(:)
-	real(dl) :: xmin, xmax, ymin, ymax, zmin, zmax
+	integer :: gb_num_xyz_mass
+	real(dl), allocatable :: gb_xyz_list(:,:), gb_mass_list(:), gb_bf_mass_list(:), gb_r_list(:)
+	real(dl) :: gbxmin, gbxmax, gbymin, gbymax, gbzmin, gbzmax
 	real(dl) :: gbrmin, gbrmax, gbtotvol
 	real(dl) :: unit_len
-	integer :: n_cellx, n_celly, n_cellz
-	real(dl) :: deltax, deltay, deltaz
-	real(dl) :: cell_vol
+	integer :: gb_n_cellx, gb_n_celly, gb_n_cellz
+	real(dl) :: gbdeltax, gbdeltay, gbdeltaz
+	real(dl) :: gb_cell_vol
 
 	type :: halo_list
 		integer :: halo_num = 0
@@ -34,7 +34,7 @@ use ap_settings_init
 	end type
 	
 	! array containing which halo in which cell
-	type(halo_list), allocatable :: cell_mat(:,:,:)
+	type(halo_list), allocatable :: gb_cell_mat(:,:,:)
 	
 	type :: pixelinfo
 		real(dl), allocatable :: xyzrlist(:,:)
@@ -49,22 +49,22 @@ contains
   ! clean up allocatable arrays
   !------------------------------------------
 	subroutine smooth_clean_up()
-		if(allocated(xyz_list)) &
-			deallocate(xyz_list)
-		if(allocated(mass_list)) &
-			deallocate(mass_list)
-		if(allocated(bf_mass_list)) &
-			deallocate(bf_mass_list)
-		if(allocated(cell_mat)) &
-			deallocate(cell_mat)
-		if(allocated(r_list)) &
-			deallocate(r_list)			
+		if(allocated(gb_xyz_list)) &
+			deallocate(gb_xyz_list)
+		if(allocated(gb_mass_list)) &
+			deallocate(gb_mass_list)
+		if(allocated(gb_bf_mass_list)) &
+			deallocate(gb_bf_mass_list)
+		if(allocated(gb_cell_mat)) &
+			deallocate(gb_cell_mat)
+		if(allocated(gb_r_list)) &
+			deallocate(gb_r_list)			
 	end subroutine
 
   !------------------------------------------
   ! initialize the xyz_mass array
   !------------------------------------------
-	subroutine init_xyz_r_mass_list(RSD, AP, gv_print_info)
+	subroutine init_xyz_r_gb_mass_list(RSD, AP, gv_print_info)
 		integer :: RSD, AP, i
 		real(dl) :: x, y, z, ratio, r
 		logical, optional :: gv_print_info
@@ -77,33 +77,33 @@ contains
 
 		call smooth_clean_up()
 
-		allocate(xyz_list(3,num_halo), mass_list(num_halo), bf_mass_list(num_halo), r_list(num_halo))
-		num_xyz_mass = num_halo
+		allocate(gb_xyz_list(3,num_halo), gb_mass_list(num_halo), gb_bf_mass_list(num_halo), gb_r_list(num_halo))
+		gb_num_xyz_mass = num_halo
 		do i = 1, num_halo
 			x = halo_info(i)%x
 			y = halo_info(i)%y
 			z = halo_info(i)%z
 			r = halo_info(i)%r
 			if    (RSD .eq. 0 .and. AP .eq. 0) then
-				r_list(i) = r 
+				gb_r_list(i) = r 
 			elseif(RSD .eq. 1 .and. AP .eq. 0) then
-				r_list(i) = halo_info(i)%r_RSD
+				gb_r_list(i) = halo_info(i)%r_RSD
 			elseif(RSD .eq. 0 .and. AP .gt. 0) then
-				r_list(i) = halo_info(i)%r_AP(AP)
+				gb_r_list(i) = halo_info(i)%r_AP(AP)
 			elseif(RSD .eq. 1 .and. AP .gt. 0) then
-				r_list(i) = halo_info(i)%r_AP_RSD(AP)
+				gb_r_list(i) = halo_info(i)%r_AP_RSD(AP)
 			else
 				print *, 'ERROR! No such RSD, AP : ', RSD, AP
 				stop
 			endif
-			ratio = r_list(i) / r 
-			xyz_list(1,i) = x * ratio
-			xyz_list(2,i) = y * ratio
-			xyz_list(3,i) = z * ratio
-			mass_list(i) = halo_info(i)%mass
-			bf_mass_list(i) = mass_list(i)
+			ratio = gb_r_list(i) / r 
+			gb_xyz_list(1,i) = x * ratio
+			gb_xyz_list(2,i) = y * ratio
+			gb_xyz_list(3,i) = z * ratio
+			gb_mass_list(i) = halo_info(i)%mass
+			gb_bf_mass_list(i) = gb_mass_list(i)
 		enddo
-	end subroutine init_xyz_r_mass_list
+	end subroutine init_xyz_r_gb_mass_list
 	
   !------------------------------------------
   ! read in the xyz_mass file
@@ -111,18 +111,18 @@ contains
   	subroutine read_in_xyz_mass(xyz_mass_file_name)
   		character(len=char_len) :: xyz_mass_file_name
 		integer :: i
-		call count_line_number(xyz_mass_file_name, num_xyz_mass)
-		print*, '   num of halo = ', num_xyz_mass, '...'
+		call count_line_number(xyz_mass_file_name, gb_num_xyz_mass)
+		print*, '   num of halo = ', gb_num_xyz_mass, '...'
 	!allocating arrays...
-		if(allocated(xyz_list)) &
-			deallocate(xyz_list)
-		if(allocated(mass_list)) &			
-			deallocate(mass_list)
-		allocate(xyz_list(3,num_xyz_mass))
-		allocate(mass_list(num_xyz_mass))
+		if(allocated(gb_xyz_list)) &
+			deallocate(gb_xyz_list)
+		if(allocated(gb_mass_list)) &			
+			deallocate(gb_mass_list)
+		allocate(gb_xyz_list(3,gb_num_xyz_mass))
+		allocate(gb_mass_list(gb_num_xyz_mass))
 		open(unit=1,file=xyz_mass_file_name)
-		do i = 1, num_xyz_mass
-			read(1,*) xyz_list(1:3,i), mass_list(i)
+		do i = 1, gb_num_xyz_mass
+			read(1,*) gb_xyz_list(1:3,i), gb_mass_list(i)
 		enddo
 	end subroutine read_in_xyz_mass
 
@@ -134,11 +134,11 @@ contains
 		real(dl), allocatable :: pos_list(:,:)
 		real(dl) :: x,y,z
 		integer :: ix, iy, iz, i
-		allocate(pos_list(3,n_cellx*n_celly*n_cellz))
+		allocate(pos_list(3,gb_n_cellx*gb_n_celly*gb_n_cellz))
 		i = 1
-		do ix = 1, n_cellx
-		do iy = 1, n_celly
-		do iz = 1, n_cellz
+		do ix = 1, gb_n_cellx
+		do iy = 1, gb_n_celly
+		do iz = 1, gb_n_cellz
 			call cell_pos(ix,iy,iz,x,y,z)
 			pos_list(1:3,i) = (/x,y,z/)
 			i = i + 1
@@ -173,70 +173,70 @@ contains
 			if(do_not_init_xyz_mass) then
 				continue
 				else
-				call init_xyz_r_mass_list(RSD, AP, print_info)
+				call init_xyz_r_gb_mass_list(RSD, AP, print_info)
 			endif
 		else
-			call init_xyz_r_mass_list(RSD, AP, print_info)
+			call init_xyz_r_gb_mass_list(RSD, AP, print_info)
 		endif
 
 		!min/max of x,y,z
-		xmin = xyz_list(1,1); xmax = xyz_list(1,1);
-		ymin = xyz_list(2,1); ymax = xyz_list(2,1);
-		zmin = xyz_list(3,1); zmax = xyz_list(3,1);
-		do i = 2, num_xyz_mass
-			x= xyz_list(1,i); y= xyz_list(2,i); z= xyz_list(3,i)
-			xmin = min(xmin,x); xmax = max(xmax,x)
-			ymin = min(ymin,y); ymax = max(ymax,y)
-			zmin = min(zmin,z); zmax = max(zmax,z)
+		gbxmin = gb_xyz_list(1,1); gbxmax = gb_xyz_list(1,1);
+		gbymin = gb_xyz_list(2,1); gbymax = gb_xyz_list(2,1);
+		gbzmin = gb_xyz_list(3,1); gbzmax = gb_xyz_list(3,1);
+		do i = 2, gb_num_xyz_mass
+			x= gb_xyz_list(1,i); y= gb_xyz_list(2,i); z= gb_xyz_list(3,i)
+			gbxmin = min(gbxmin,x); gbxmax = max(gbxmax,x)
+			gbymin = min(gbymin,y); gbymax = max(gbymax,y)
+			gbzmin = min(gbzmin,z); gbzmax = max(gbzmax,z)
 		enddo
 		!min/max of r
-		call find_min_max(r_list, num_halo, gbrmin, gbrmax)
+		call find_min_max(gb_r_list, num_halo, gbrmin, gbrmax)
 		gbtotvol = vol_fun(gbrmin, gbrmax)
 		
 		if(print_info) then
-			write(*,'(2x,A,f10.5,2x,f10.5)')  '  xmin / xmax = ', xmin, xmax
-			write(*,'(2x,A,f10.5,2x,f10.5)')  '  ymin / ymax = ', ymin, ymax
-			write(*,'(2x,A,f10.5,2x,f10.5)')  '  zmin / zmax = ', zmin, zmax
+			write(*,'(2x,A,f10.5,2x,f10.5)')  '  gbxmin / gbxmax = ', gbxmin, gbxmax
+			write(*,'(2x,A,f10.5,2x,f10.5)')  '  gbymin / gbymax = ', gbymin, gbymax
+			write(*,'(2x,A,f10.5,2x,f10.5)')  '  gbzmin / gbzmax = ', gbzmin, gbzmax
 		endif
 		
 	!basic info for cell division	
 !		if(use_sd_unit_len) then
 !			unit_len = sd_unit_len
 !		else
-			unit_len = (xmax - xmin) / dble(num_in_x)
+			unit_len = (gbxmax - gbxmin) / dble(num_in_x)
 !		endif
 
-		n_cellx = int( (xmax-xmin)/unit_len + 0.5)
-		n_celly = int( (ymax-ymin)/unit_len + 0.5)
-		n_cellz = int( (zmax-zmin)/unit_len + 0.5)
+		gb_n_cellx = int( (gbxmax-gbxmin)/unit_len + 0.5)
+		gb_n_celly = int( (gbymax-gbymin)/unit_len + 0.5)
+		gb_n_cellz = int( (gbzmax-gbzmin)/unit_len + 0.5)
 
-		deltax = (xmax-xmin) / dble(n_cellx)
-		deltay = (ymax-ymin) / dble(n_celly)
-		deltaz = (zmax-zmin) / dble(n_cellz)
+		gbdeltax = (gbxmax-gbxmin) / dble(gb_n_cellx)
+		gbdeltay = (gbymax-gbymin) / dble(gb_n_celly)
+		gbdeltaz = (gbzmax-gbzmin) / dble(gb_n_cellz)
 
-		cell_vol = deltax * deltay * deltaz
+		gb_cell_vol = gbdeltax * gbdeltay * gbdeltaz
 
 		if(print_info) then
-			print*,  '   n_cellx, deltax = ', n_cellx, deltax
-			print*,  '   n_celly, deltay = ', n_celly, deltay
-			print*,  '   n_cellz, deltaz = ', n_cellz, deltaz
-			print*,  '   cell_vol = ', cell_vol
+			print*,  '   gb_n_cellx, gbdeltax = ', gb_n_cellx, gbdeltax
+			print*,  '   gb_n_celly, gbdeltay = ', gb_n_celly, gbdeltay
+			print*,  '   gb_n_cellz, gbdeltaz = ', gb_n_cellz, gbdeltaz
+			print*,  '   gb_cell_vol = ', gb_cell_vol
 		endif
 
 		
-	!allocating cell_mat 
-		if(allocated(cell_mat)) &
-			deallocate(cell_mat)
-		allocate(cell_mat(n_cellx,n_celly,n_cellz))	
+	!allocating gb_cell_mat 
+		if(allocated(gb_cell_mat)) &
+			deallocate(gb_cell_mat)
+		allocate(gb_cell_mat(gb_n_cellx,gb_n_celly,gb_n_cellz))	
 		allocate(tmp_list(max_incell_halo_num))
 				
-		do i = 1, num_xyz_mass
-			x= xyz_list(1,i); y= xyz_list(2,i); z= xyz_list(3,i)
-			ix=max(min(int((x-xmin)/deltax)+1,n_cellx),1)
-			iy=max(min(int((y-ymin)/deltay)+1,n_celly),1)
-			iz=max(min(int((z-zmin)/deltaz)+1,n_cellz),1)
+		do i = 1, gb_num_xyz_mass
+			x= gb_xyz_list(1,i); y= gb_xyz_list(2,i); z= gb_xyz_list(3,i)
+			ix=max(min(int((x-gbxmin)/gbdeltax)+1,gb_n_cellx),1)
+			iy=max(min(int((y-gbymin)/gbdeltay)+1,gb_n_celly),1)
+			iz=max(min(int((z-gbzmin)/gbdeltaz)+1,gb_n_cellz),1)
 			
-			now_halo_num = cell_mat(ix,iy,iz)%halo_num
+			now_halo_num = gb_cell_mat(ix,iy,iz)%halo_num
 			
 			if(now_halo_num .eq. max_incell_halo_num) then
 				print *, 'ERROR! incell halo num overflows'
@@ -245,25 +245,145 @@ contains
 			
 			if(mod(now_halo_num,re_alo_num) .eq. 0) then
 				if(now_halo_num .eq. 0) then
-					allocate(cell_mat(ix,iy,iz)%list(re_alo_num))
+					allocate(gb_cell_mat(ix,iy,iz)%list(re_alo_num))
 				else
 !					print*, 'ix,iy,iz,now_halo_num = ', ix,iy,iz,now_halo_num
-					tmp_list(1:now_halo_num) = cell_mat(ix,iy,iz)%list(1:now_halo_num)
-					deallocate(cell_mat(ix,iy,iz)%list)
-					allocate(cell_mat(ix,iy,iz)%list(now_halo_num+re_alo_num))
-					cell_mat(ix,iy,iz)%list(1:now_halo_num) = tmp_list(1:now_halo_num)
+					tmp_list(1:now_halo_num) = gb_cell_mat(ix,iy,iz)%list(1:now_halo_num)
+					deallocate(gb_cell_mat(ix,iy,iz)%list)
+					allocate(gb_cell_mat(ix,iy,iz)%list(now_halo_num+re_alo_num))
+					gb_cell_mat(ix,iy,iz)%list(1:now_halo_num) = tmp_list(1:now_halo_num)
 				endif
 			endif
 			
 			now_halo_num = now_halo_num + 1
-			cell_mat(ix,iy,iz)%halo_num = now_halo_num
-			cell_mat(ix,iy,iz)%list(now_halo_num) = i
+			gb_cell_mat(ix,iy,iz)%halo_num = now_halo_num
+			gb_cell_mat(ix,iy,iz)%list(now_halo_num) = i
 		enddo
 		deallocate(tmp_list)
 		if(print_info) then
 			print *, '  Cell initialization done.'
 		endif
 	end subroutine
+	
+  !------------------------------------------
+  ! initialize the Calculation
+  !------------------------------------------
+	subroutine do_cell_init2(RSD, AP, rl_num_in_x, gv_print_info, do_not_init_xyz_mass)
+		integer :: RSD, AP, num_in_x
+		real(dl) :: rl_num_in_x
+		logical, optional :: gv_print_info, do_not_init_xyz_mass
+		logical :: print_info
+		integer :: i, j, k, ix, iy, iz
+		real(dl) :: x,y,z
+		integer :: now_halo_num
+		!maximal length of array to save index of halos in one cell
+		integer, parameter :: max_incell_halo_num = 10000
+		integer, parameter :: re_alo_num = 100
+
+		real(dl), allocatable :: tmp_list(:)
+		
+		if(present(gv_print_info)) then
+			print_info = gv_print_info
+			else
+			print_info = .false.
+		endif
+		
+		if(present(do_not_init_xyz_mass)) then
+			if(do_not_init_xyz_mass) then
+				continue
+				else
+				call init_xyz_r_gb_mass_list(RSD, AP, print_info)
+			endif
+		else
+			call init_xyz_r_gb_mass_list(RSD, AP, print_info)
+		endif
+
+		!min/max of x,y,z
+		gbxmin = gb_xyz_list(1,1); gbxmax = gb_xyz_list(1,1);
+		gbymin = gb_xyz_list(2,1); gbymax = gb_xyz_list(2,1);
+		gbzmin = gb_xyz_list(3,1); gbzmax = gb_xyz_list(3,1);
+		do i = 2, gb_num_xyz_mass
+			x= gb_xyz_list(1,i); y= gb_xyz_list(2,i); z= gb_xyz_list(3,i)
+			gbxmin = min(gbxmin,x); gbxmax = max(gbxmax,x)
+			gbymin = min(gbymin,y); gbymax = max(gbymax,y)
+			gbzmin = min(gbzmin,z); gbzmax = max(gbzmax,z)
+		enddo
+		!min/max of r
+		call find_min_max(gb_r_list, num_halo, gbrmin, gbrmax)
+		gbtotvol = vol_fun(gbrmin, gbrmax)
+		
+		if(print_info) then
+			write(*,'(2x,A,f10.5,2x,f10.5)')  '  gbxmin / gbxmax = ', gbxmin, gbxmax
+			write(*,'(2x,A,f10.5,2x,f10.5)')  '  gbymin / gbymax = ', gbymin, gbymax
+			write(*,'(2x,A,f10.5,2x,f10.5)')  '  gbzmin / gbzmax = ', gbzmin, gbzmax
+		endif
+		
+	!basic info for cell division	
+!		if(use_sd_unit_len) then
+!			unit_len = sd_unit_len
+!		else
+		unit_len = (gbxmax - gbxmin) / rl_num_in_x
+!		endif
+
+		gb_n_cellx = int( (gbxmax-gbxmin)/unit_len + 0.5)
+		gb_n_celly = int( (gbymax-gbymin)/unit_len + 0.5)
+		gb_n_cellz = int( (gbzmax-gbzmin)/unit_len + 0.5)
+
+		gbdeltax = unit_len
+		gbdeltay = unit_len
+		gbdeltaz = unit_len
+
+		gb_cell_vol = gbdeltax * gbdeltay * gbdeltaz
+		if(print_info) then
+			print*, 'rl_num_in_x =', rl_num_in_x, '...'
+			print*,  '   gb_n_cellx, gbdeltax = ', gb_n_cellx, gbdeltax
+			print*,  '   gb_n_celly, gbdeltay = ', gb_n_celly, gbdeltay
+			print*,  '   gb_n_cellz, gbdeltaz = ', gb_n_cellz, gbdeltaz
+			print*,  '   gb_cell_vol = ', gb_cell_vol
+		endif
+
+		
+	!allocating gb_cell_mat 
+		if(allocated(gb_cell_mat)) &
+			deallocate(gb_cell_mat)
+		allocate(gb_cell_mat(gb_n_cellx,gb_n_celly,gb_n_cellz))	
+		allocate(tmp_list(max_incell_halo_num))
+				
+		do i = 1, gb_num_xyz_mass
+			x= gb_xyz_list(1,i); y= gb_xyz_list(2,i); z= gb_xyz_list(3,i)
+			ix=max(min(int((x-gbxmin)/gbdeltax)+1,gb_n_cellx),1)
+			iy=max(min(int((y-gbymin)/gbdeltay)+1,gb_n_celly),1)
+			iz=max(min(int((z-gbzmin)/gbdeltaz)+1,gb_n_cellz),1)
+			
+			now_halo_num = gb_cell_mat(ix,iy,iz)%halo_num
+			
+			if(now_halo_num .eq. max_incell_halo_num) then
+				print *, 'ERROR! incell halo num overflows'
+				stop
+			endif
+			
+			if(mod(now_halo_num,re_alo_num) .eq. 0) then
+				if(now_halo_num .eq. 0) then
+					allocate(gb_cell_mat(ix,iy,iz)%list(re_alo_num))
+				else
+!					print*, 'ix,iy,iz,now_halo_num = ', ix,iy,iz,now_halo_num
+					tmp_list(1:now_halo_num) = gb_cell_mat(ix,iy,iz)%list(1:now_halo_num)
+					deallocate(gb_cell_mat(ix,iy,iz)%list)
+					allocate(gb_cell_mat(ix,iy,iz)%list(now_halo_num+re_alo_num))
+					gb_cell_mat(ix,iy,iz)%list(1:now_halo_num) = tmp_list(1:now_halo_num)
+				endif
+			endif
+			
+			now_halo_num = now_halo_num + 1
+			gb_cell_mat(ix,iy,iz)%halo_num = now_halo_num
+			gb_cell_mat(ix,iy,iz)%list(now_halo_num) = i
+		enddo
+		deallocate(tmp_list)
+		if(print_info) then
+			print *, '  Cell initialization done.'
+		endif
+	end subroutine do_cell_init2
+	
 	
 	
   !------------------------------------------
@@ -279,12 +399,12 @@ contains
   		integer :: i,j,k,l1,l2,ix,iy,iz,requirednum
   		integer :: di, i1,i2, j1,j2, k1,k2, now_num
   		real(dl) :: dev, ra_ratio, ratio
-  		ix = max(min(int((x-xmin)/deltax)+1,n_cellx),1)
-  		iy = max(min(int((y-ymin)/deltay)+1,n_celly),1)
-  		iz = max(min(int((z-zmin)/deltaz)+1,n_cellz),1)
-  		dev = max(abs(abs(xmin + (ix-1)*deltax - x)/deltax - 0.5), &
-  			abs(abs(ymin + (iy-1)*deltay - y)/deltay - 0.5), &
-  			abs(abs(zmin + (iz-1)*deltaz - z)/deltaz - 0.5) )
+  		ix = max(min(int((x-gbxmin)/gbdeltax)+1,gb_n_cellx),1)
+  		iy = max(min(int((y-gbymin)/gbdeltay)+1,gb_n_celly),1)
+  		iz = max(min(int((z-gbzmin)/gbdeltaz)+1,gb_n_cellz),1)
+  		dev = max(abs(abs(gbxmin + (ix-1)*gbdeltax - x)/gbdeltax - 0.5), &
+  			abs(abs(gbymin + (iy-1)*gbdeltay - y)/gbdeltay - 0.5), &
+  			abs(abs(gbzmin + (iz-1)*gbdeltaz - z)/gbdeltaz - 0.5) )
   		if(present(given_ra_ratio)) then
   			ra_ratio = given_ra_ratio
   		else
@@ -295,14 +415,14 @@ contains
 !  		print *, 'ix, iy, iz, dev, ratio, requirednum = ', ix, iy, iz, dev, ratio, requirednum
 		di = 0
 		do while(1.eq.1)
-			call ilist(ix,di,1,n_cellx,i1,i2)
-			call ilist(iy,di,1,n_celly,j1,j2)
-			call ilist(iz,di,1,n_cellz,k1,k2)
+			call ilist(ix,di,1,gb_n_cellx,i1,i2)
+			call ilist(iy,di,1,gb_n_celly,j1,j2)
+			call ilist(iz,di,1,gb_n_cellz,k1,k2)
 			now_num = 0
 			do i = i1, i2
 			do j = j1, j2
 			do k = k1, k2
-				now_num = now_num + cell_mat(i,j,k)%halo_num
+				now_num = now_num + gb_cell_mat(i,j,k)%halo_num
 			enddo
 			enddo
 			enddo
@@ -314,8 +434,8 @@ contains
 		do i = i1, i2
 		do j = j1, j2
 		do k = k1, k2
-			do l2 = 1, cell_mat(i,j,k)%halo_num
-				selected_list(l1) = cell_mat(i,j,k)%list(l2)
+			do l2 = 1, gb_cell_mat(i,j,k)%halo_num
+				selected_list(l1) = gb_cell_mat(i,j,k)%list(l2)
 				l1 = l1 + 1
 			enddo
 		enddo
@@ -329,9 +449,9 @@ contains
   	subroutine cell_pos(ix,iy,iz,x,y,z)
 		integer ix, iy, iz
   		real(dl) :: x,y,z
-  		x = xmin + (ix-0.5)*deltax
-  		y = ymin + (iy-0.5)*deltay
-  		z = zmin + (iz-0.5)*deltaz
+  		x = gbxmin + (ix-0.5)*gbdeltax
+  		y = gbymin + (iy-0.5)*gbdeltay
+  		z = gbzmin + (iz-0.5)*gbdeltaz
 	end subroutine cell_pos
 
 
@@ -357,7 +477,7 @@ contains
   		allocate(tmpindex(n), distance_array(n))
 		r0(1)=x; r0(2)=y; r0(3)=z;
 		do i = 1, n
-			distance_array(i) = distance(xyz_list(1:3,index_array(i)),r0)
+			distance_array(i) = distance(gb_xyz_list(1:3,index_array(i)),r0)
 			tmpindex(i) = index_array(i)
 		enddo
 
@@ -368,8 +488,8 @@ contains
 		
 		do i = 1, num
 			nowindex = tmpindex(smlablist(i))
-			xyz_mass_array(1:3,i) = xyz_list(1:3,nowindex)
-			xyz_mass_array(4,i) = mass_list(nowindex)
+			xyz_mass_array(1:3,i) = gb_xyz_list(1:3,nowindex)
+			xyz_mass_array(4,i) = gb_mass_list(nowindex)
 !		  		print *, i, real(xyz_mass_array(1:5,i))
  		enddo
 
@@ -408,7 +528,7 @@ contains
 		rho = 0; drhodx=0;drhody=0;drhodz=0;
 		do i = 1, num
 			r = pixel%xyzrlist(4,i)
-			mass = mass_list(pixel%indexlist(i))
+			mass = gb_mass_list(pixel%indexlist(i))
 			rho = rho + mass*w_kernel(r, h)
 			dweight = der_w_kernel(r,h)
 			drhodx = drhodx + mass*(x-pixel%xyzrlist(1,i)) / r * dweight
@@ -444,7 +564,7 @@ contains
   		allocate(tmpindex(n), distance_array(n))
 		r0(1)=x; r0(2)=y; r0(3)=z;
 		do i = 1, n
-			distance_array(i) = distance(xyz_list(1:3,index_array(i)),r0)
+			distance_array(i) = distance(gb_xyz_list(1:3,index_array(i)),r0)
 			tmpindex(i) = index_array(i)
 		enddo
 
@@ -455,8 +575,8 @@ contains
 		
 		do i = 1, num
 			nowindex = tmpindex(smlablist(i))
-			xyz_mass_array(1:3,i) = xyz_list(1:3,nowindex)
-			xyz_mass_array(4,i) = mass_list(nowindex)
+			xyz_mass_array(1:3,i) = gb_xyz_list(1:3,nowindex)
+			xyz_mass_array(4,i) = gb_mass_list(nowindex)
 			!!! Save results to pixel
 			pixel%indexlist(i) = nowindex
  		enddo
@@ -521,7 +641,7 @@ contains
 				rho = 0; drhodx=0;drhody=0;drhodz=0;
 				do i = 1, num
 					r = pixel%xyzrlist(4,i)
-					mass = mass_list(pixel%indexlist(i))
+					mass = gb_mass_list(pixel%indexlist(i))
 					rho = rho + mass*w_kernel(r, h)
 					dweight = der_w_kernel(r,h)
 					drhodx = drhodx + mass*(x-pixel%xyzrlist(1,i)) / r * dweight
@@ -554,7 +674,7 @@ contains
   		allocate(tmpindex(n), distance_array(n))
 		r0(1)=x; r0(2)=y; r0(3)=z;
 		do i = 1, n
-			distance_array(i) = distance(xyz_list(1:3,index_array(i)),r0)
+			distance_array(i) = distance(gb_xyz_list(1:3,index_array(i)),r0)
 			tmpindex(i) = index_array(i)
 		enddo
 
@@ -567,8 +687,8 @@ contains
 		
 		do i = 1, num
 			nowindex = tmpindex(smlablist(i))
-			xyz_mass_array(1:3,i) = xyz_list(1:3,nowindex)
-			xyz_mass_array(4,i) = mass_list(nowindex)
+			xyz_mass_array(1:3,i) = gb_xyz_list(1:3,nowindex)
+			xyz_mass_array(4,i) = gb_mass_list(nowindex)
 !		  		print *, i, real(xyz_mass_array(1:5,i))
  		enddo
 

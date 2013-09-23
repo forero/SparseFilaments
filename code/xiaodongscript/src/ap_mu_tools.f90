@@ -174,5 +174,97 @@ contains
 		enddo
 		chisq_of_mu_data = chisq
 	end function chisq_of_mu_data
+
+
+  !------------------------------------------
+  ! another definition of chisq
+  !------------------------------------------	
+	real(dl) function chisq_of_mu_data2(mu_data)
+		real(dl), intent(in) :: mu_data(:)
+		real(dl), allocatable :: tmp(:)
+		real(dl) :: mumean, muvar, muer
+		integer :: i, n
+!		logical :: changemudata
+		
+		n = size(mu_data)
+		allocate(tmp(n))
+		do i = 1, n
+			tmp(i)= abs(mu_data(i))
+		enddo
+		
+		call get_mean_var(tmp, mumean, muvar)
+		muer = sqrt(muvar) / sqrt(n-1.0)
+		chisq_of_mu_data2 = (mumean-0.5_dl)**2.0/muer**2.0
+	end function chisq_of_mu_data2
+
+
+  !------------------------------------------
+  ! shift the mu data
+  !------------------------------------------	
+	subroutine shift_mu_data(mu_data, mumin, mumax, mushift)
+		real(dl), intent(inout) :: mu_data(:)
+		real(dl), intent(in) :: mumin, mumax, mushift
+		real(dl) :: x
+		integer :: i, n
+!		logical :: changemudata
+		
+		n = size(mu_data)
+		do i = 1, n
+			x = mu_data(i) + mushift
+			do while(x .gt. mumax)
+				x = mumin + (x-mumax)
+			enddo
+			do while(x .lt. mumin)
+				x = mumax - (mumin - x)
+			enddo
+			mu_data(i) = x
+		enddo
+		
+	end subroutine shift_mu_data
+
+  !------------------------------------------
+  ! another definition of chisq
+  !------------------------------------------	
+	real(dl) function chisq_of_mu_data_shift(mu_data, num_bins, num_shift, gv_printinfo)
+		! DUMMY
+		real(dl), intent(in) :: mu_data(:)
+		integer, intent(in) :: num_bins, num_shift
+		logical, intent(in), optional :: gv_printinfo
+		! LOCAL
+		logical :: printinfo
+		real(dl), allocatable :: tmp(:)
+		real(dl) :: chisqlist(num_shift+1), dshift, mean, var
+		integer :: i, n
+
+		if(present(gv_printinfo)) then
+			printinfo = gv_printinfo
+		else
+			printinfo = .false.
+		endif
+		
+		dshift = 2.0_dl / (num_bins+0.0) / (num_shift+1.0_dl)
+		
+		n = size(mu_data)
+		allocate(tmp(n))
+		do i = 1, n
+			tmp(i) = mu_data(i)
+		enddo
+		
+		chisqlist(1) = chisq_of_mu_data(tmp, num_bins)
+		
+		do i = 1,num_shift
+			call shift_mu_data(tmp, -1.0_dl, 1.0_dl, dshift)
+			chisqlist(i+1) = chisq_of_mu_data(tmp, num_bins)
+		enddo
+		
+		chisq_of_mu_data_shift = sum(chisqlist) / (num_shift + 1.0)
+		if(printinfo) then
+			write(*,'(A,<num_shift+1>(f11.7,1x))') ' list of chisqs:', real(chisqlist)
+			call get_mean_var(chisqlist, mean, var)
+			write(*,*) 'Mean, var, sqrt(var) = ', real(mean), real(var), real(sqrt(var))
+		endif
+
+	end function chisq_of_mu_data_shift
+
 	
 end module ap_mu_tools

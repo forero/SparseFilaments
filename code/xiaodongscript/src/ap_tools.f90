@@ -1,7 +1,7 @@
 module ap_tools
 
 	implicit none
-	integer, parameter :: char_len = 100
+	integer, parameter :: char_len = 300
 	integer, parameter :: dl = KIND(1.0d0)
 	integer, parameter :: sp = KIND(1.0)
 	real(dl), parameter :: const_pi = 3.141592653589793d0

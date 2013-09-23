@@ -20,7 +20,7 @@ use ap_chisq
 
 	type(chisq_settings) :: cs
 	character(len=char_len) :: inputfile, outputname, &
-		rhofile, rhoRSDfile, deltafile, deltaRSDfile, ndeltafile, ndeltaRSDfile, str, str2
+		rhofile, rhoRSDfile, deltafile, deltaRSDfile, ndeltafile, ndeltaRSDfile, str
 	integer :: num_nbins
 	integer*2 :: tmpint 
 	integer :: i, j, n, num_om, num_w
@@ -206,6 +206,7 @@ use ap_chisq
 	call cpu_time(timebegin)
 	time1 = timebegin
 	
+	
 	do i = 1, n
 		om = om_w_list(1,i)
 		w  = om_w_list(2,i)
@@ -236,7 +237,7 @@ use ap_chisq
 		
 		call cpu_time(time2)
 		if(gbtp) then
-			write(*,'(A,f10.4)') '  Time used in this step: ', time2-time1
+			write(*,'(A,f8.4)') '  Time used in this step: ', time2-time1
 			write(*,'(A,<6*num_nbins>(f12.7,1x))') '  Chisqs: ', rho_chisqlist(1:num_nbins), delta_chisqlist(1:num_nbins), &
 				ndelta_chisqlist(1:num_nbins), rhoRSD_chisqlist(1:num_nbins), ndeltaRSD_chisqlist(1:num_nbins)
 			time1 = time2
