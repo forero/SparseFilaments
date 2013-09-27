@@ -27,10 +27,14 @@ module ap_tools
 		logical :: print_info = .false.
 		real(dl) :: cb_adjust_ratio = 1.0_dl, remov_dist_ratio = 1.0_dl
 		logical :: use_num_density = .true.
-		integer :: nbins_rhoav = 10
+		integer :: nbins_rhoav = 10 ! abnondoned!
 		logical :: use_intpl_rho = .true.
 		logical :: has_RSD = .true.
-		integer, allocatable :: nbins_list(:)
+!		integer, allocatable :: nbins_list(:) ! abondoned !
+		integer :: numdrop ! From here, not used yet!! !
+		logical, allocatable :: dropval(:), dropdval(:)
+		real(dl), allocatable :: lowdropvalratio(:), highdropvalratio(:), lowdropdvalratio(:), highdropdvalratio(:)
+		!gb_dropdvalratio(2,2)
 	end type
 	
 	contains
@@ -959,7 +963,7 @@ module ap_tools
   		logical :: print_test
   		
   		if(numsm .le. 0 .or. numsm .gt. nA) then
-  			print *, 'ERROR (ltlablist2)! numsm must be within 0, nA: ', numsm, nA
+  			print *, 'ERROR (Warning2)! numsm must be within 0, nA: ', numsm, nA
   			stop
   		endif
   		
@@ -972,7 +976,7 @@ module ap_tools
   			if(nstep .gt. 100) then 
   			!Sometimes quickfind runs endless...(I donot know reason), and we have to switch to Qsort
   			!Code below are very hard understanding... Anyway, it works.
-  				print *, 'Warning (ltlablist2)! Very large nstep! Switch to Qsort...'
+!  				print *, 'Warning (ltlablist2)! Very large nstep! Switch to Qsort...'
   				allocate(B(nA),orderA(nA),tmpint(nA))
   				do i = 1, nA
   					orderA(i) = i

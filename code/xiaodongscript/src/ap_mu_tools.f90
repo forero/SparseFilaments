@@ -184,14 +184,11 @@ contains
 		real(dl), allocatable :: tmp(:)
 		real(dl) :: mumean, muvar, muer
 		integer :: i, n
-!		logical :: changemudata
-		
 		n = size(mu_data)
 		allocate(tmp(n))
 		do i = 1, n
 			tmp(i)= abs(mu_data(i))
 		enddo
-		
 		call get_mean_var(tmp, mumean, muvar)
 		muer = sqrt(muvar) / sqrt(n-1.0)
 		chisq_of_mu_data2 = (mumean-0.5_dl)**2.0/muer**2.0

@@ -443,6 +443,156 @@ contains
 		enddo
 	end subroutine nb_select
 		
+
+  !------------------------------------------
+  ! select out halos in the cells nearby the
+  !  given position. make sure the number is 
+  !  far larger than the required
+  !------------------------------------------
+  	subroutine nb_select2(x,y,z,num,selected_list)
+  		real(dl), intent(in) :: x,y,z
+  		integer, intent(in) :: num
+ ! 		real(dl), optional, intent(in) :: given_ra_ratio  		
+  		integer, allocatable, intent(out) :: selected_list(:)
+  		integer :: i,j,k,l1,l2,ix,iy,iz,requirednum
+  		integer :: di, i1,i2, j1,j2, k1,k2, now_num
+  		real(dl) :: dev, ra_ratio, ratio
+  		
+  		ix = max(min(int((x-gbxmin)/gbdeltax+0.01)+1,gb_n_cellx),1)
+  		iy = max(min(int((y-gbymin)/gbdeltay+0.01)+1,gb_n_celly),1)
+  		iz = max(min(int((z-gbzmin)/gbdeltaz+0.01)+1,gb_n_cellz),1)
+  		dev = max(abs(abs(gbxmin + (ix-1)*gbdeltax - x)/gbdeltax - 0.5), &
+  			abs(abs(gbymin + (iy-1)*gbdeltay - y)/gbdeltay - 0.5), &
+  			abs(abs(gbzmin + (iz-1)*gbdeltaz - z)/gbdeltaz - 0.5) )
+		
+!		print *, 'ix, iy, iz, dev = ', ix, iy, iz, dev ! lxd
+!		stop
+
+  		requirednum = num
+!  		print *, 'ix, iy, iz, dev, ratio, requirednum = ', ix, iy, iz, dev, ratio, requirednum
+		di = 0
+		do while(1.eq.1)
+			call ilist(ix,di,1,gb_n_cellx,i1,i2)
+			call ilist(iy,di,1,gb_n_celly,j1,j2)
+			call ilist(iz,di,1,gb_n_cellz,k1,k2)
+			now_num = 0
+			do i = i1, i2
+			do j = j1, j2
+			do k = k1, k2
+				now_num = now_num + gb_cell_mat(i,j,k)%halo_num
+			enddo
+			enddo
+			enddo
+			if(now_num .ge. requirednum) exit
+			di = di + 1
+		enddo
+		di = ceiling((di+0.5)*sqrt(3.0)-0.5)
+		call ilist(ix,di,1,gb_n_cellx,i1,i2)
+		call ilist(iy,di,1,gb_n_celly,j1,j2)
+		call ilist(iz,di,1,gb_n_cellz,k1,k2)
+		now_num = 0
+		do i = i1, i2
+		do j = j1, j2
+		do k = k1, k2
+			now_num = now_num + gb_cell_mat(i,j,k)%halo_num
+		enddo
+		enddo
+		enddo
+		allocate(selected_list(now_num))
+		l1 = 1
+		do i = i1, i2
+		do j = j1, j2
+		do k = k1, k2
+			do l2 = 1, gb_cell_mat(i,j,k)%halo_num
+				selected_list(l1) = gb_cell_mat(i,j,k)%list(l2)
+				l1 = l1 + 1
+			enddo
+		enddo
+		enddo
+		enddo
+	end subroutine nb_select2
+
+  !------------------------------------------
+  ! select out cells which are surrounded to 
+  !  a center, with distance di
+  ! not efficient, abondoned!
+  !------------------------------------------
+	subroutine nbcell_list(ix,iy,iz,di,narray,istart,iend,nbclist)
+		! dummy
+		integer, intent(in) :: ix, iy, iz, di, narray,istart
+		integer, intent(out) :: iend,nbclist(3,narray)
+		! local
+		integer :: n, i, j, k, nowi 
+
+		if(di .eq. 0) then
+			iend = istart
+			nbclist(1,istart) = ix
+			nbclist(2,istart) = iy
+			nbclist(3,istart) = iz
+			nowi = istart+1
+		else
+			iend = istart + (2*di*4)*(2*di+1) + 2*(2*di-1)**2 - 1
+			nowi = istart			
+			do k = iz-di, iz+di
+				i = ix+di
+				do j = iy-di,iy+di
+					nbclist(1,nowi) = i
+					nbclist(2,nowi) = j
+					nbclist(3,nowi) = k
+					nowi = nowi + 1
+				enddo
+				i = ix-di
+				do j = iy-di,iy+di
+					nbclist(1,nowi) = i
+					nbclist(2,nowi) = j
+					nbclist(3,nowi) = k
+					nowi = nowi + 1
+				enddo
+				j = iy-di
+				do i = ix-di+1,ix+di-1
+					nbclist(1,nowi) = i
+					nbclist(2,nowi) = j
+					nbclist(3,nowi) = k
+					nowi = nowi + 1
+				enddo
+				j = iy+di
+				do i = ix-di+1,ix+di-1
+					nbclist(1,nowi) = i
+					nbclist(2,nowi) = j
+					nbclist(3,nowi) = k
+					nowi = nowi + 1
+				enddo
+			enddo
+			k = iz-di
+			do i = ix-di+1, ix+di-1
+				do j = iy-di+1, iy+di-1
+					nbclist(1,nowi) = i
+					nbclist(2,nowi) = j
+					nbclist(3,nowi) = k
+					nowi = nowi + 1
+				enddo
+			enddo
+			k = iz+di
+			do i = ix-di+1, ix+di-1
+				do j = iy-di+1, iy+di-1
+					nbclist(1,nowi) = i
+					nbclist(2,nowi) = j
+					nbclist(1,nowi) = k
+					nowi = nowi + 1
+				enddo
+			enddo
+		endif
+		
+!		print *, 'di, istart     = ', di, istart
+!		print *, 'iend, nowi-1   = ', iend, nowi-1
+!		print *, '  List of coords:'
+!		do i = istart, iend
+!			print *, '     nowi: ', i, '; coord: ', nbclist(1:3,i)
+!		enddo
+!		print *
+	end subroutine nbcell_list
+
+
   !------------------------------------------
   ! central position of the cell
   !------------------------------------------	
