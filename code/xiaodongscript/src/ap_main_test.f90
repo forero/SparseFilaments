@@ -1,7 +1,7 @@
 
 program ap_main_test
 
-use mpi
+!use mpi
 use ap_tools
 use ap_chisq
 

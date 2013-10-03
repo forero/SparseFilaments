@@ -113,6 +113,7 @@ contains
 !			endif
 		rho_chisqlist = 0.0_dl
 		do i = 1, size(changenuminxlist)
+!			print *, 'Calculating many chisqs (with pixels rescaling): i = ', i
 			call gd_mldprho_chi2s(RSD, AP, cs, changenuminxlist(i), tmpchisqlist)
 			if(gbtp) then
 !				write(*,'(A,f9.4,A,<cs%numdrop>(f13.7,1x))'), '   chisqs at changenuminx = ', real(changenuminxlist(i)), ':', &

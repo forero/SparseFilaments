@@ -20,7 +20,7 @@
 
 program ap_main
 
-use mpi
+!use mpi
 use ap_chisq
 
 	implicit none
@@ -176,7 +176,7 @@ use ap_chisq
 		stop
 	endif
 	
-	scan2 = .true. ! only no RSD scan
+	scan2 = .false. ! only no RSD scan
 	if(scan2) then
 		print *, 'Warning!!!! Scan of only no RSD!'
 		do i = 1, num_omw

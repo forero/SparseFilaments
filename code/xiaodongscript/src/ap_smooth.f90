@@ -76,8 +76,10 @@ contains
 		endif
 
 		call smooth_clean_up()
-
+		
+!		print *, 'Before allocating gb_xyz_list...'
 		allocate(gb_xyz_list(3,num_halo), gb_mass_list(num_halo), gb_bf_mass_list(num_halo), gb_r_list(num_halo))
+!		print *, 'After allocating gb_xyz_list...'
 		gb_num_xyz_mass = num_halo
 		do i = 1, num_halo
 			x = halo_info(i)%x

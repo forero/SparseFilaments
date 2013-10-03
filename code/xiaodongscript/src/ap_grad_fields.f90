@@ -387,8 +387,10 @@ contains
 		
 		if(cs%print_info) print *, 'Estimating rho, delta, normed_delta: changenuminx = ', real(changenuminx), '...'
 
+!		print *, '(gd_mldprho_chi2s) Test A...'
 		call grid_rho_drho_list(RSD, AP, cs, changenuminx, pos_list0, rho_list0, drho_list0, &
 				boundary_rmin, boundary_rmax)
+!		print *, '(gd_mldprho_chi2s) Test B...'
 
 		call cpu_time(time1)		
 		
@@ -398,11 +400,13 @@ contains
 		endif
 		
 		n1 = size(rho_list0)
+!		print *, '(gd_mldprho_chi2s) Test C...'
 		allocate(absdrholist(n1),markdrop(n1),reflist(n1))
 		do i = 1, n1
 			absdrholist(i)=sqrt(drho_list0(1,i)**2.0+drho_list0(2,i)**2.0+drho_list0(3,i)**2.0)
 		enddo
 
+!		print *, '(gd_mldprho_chi2s) Test D...'
 		do idrop = 1, cs%numdrop
 			! cycle if no drop
 			if(.not.cs%dropval(idrop) .and. .not.cs%dropdval(idrop)) then
@@ -455,6 +459,7 @@ contains
 			print *, '  Time used in drop: ', real(time2-time1)
 		endif
 		gradfieldprintinfo = .false.
+!		print *, '(gd_mldprho_chi2s) Test E...'		
 	end subroutine gd_mldprho_chi2s
 	
 
