@@ -18,7 +18,11 @@ use ap_mu_tools
 	logical, public :: gb_dropval(2), gb_dropdval(2)
 	real(dl), public :: gb_dropvalratio(2,2), gb_dropdvalratio(2,2)
 	logical, public :: gradfieldprintinfo = .true.
-	
+	integer, parameter :: gb_numwei = 5
+!############################## Commenting testing codes
+	character(len=char_len) :: tsbestr, tsbefilestr
+	logical :: dotsbe
+		
 contains	
 
   !------------------------------------------
@@ -132,7 +136,8 @@ contains
 				call nb_list0(x,y,z,cs%smnum,rho,drhox,drhoy,drhoz,max_dist)
 			endif
 			if(cs%check_boundary) then
-				if(has_boundary_effect(x,y,z,max_dist,boundary_rmin,boundary_rmax,cs%cb_adjust_ratio)) cycle
+!				if(has_boundary_effect(x,y,z,max_dist,boundary_rmin,boundary_rmax,gbxmax,gbymax,gbzmax,cs%cb_adjust_ratio)) cycle
+				if(has_boundary_effect(x,y,z,max_dist,cs%cb_adjust_ratio)) cycle
 			endif	
 			n2=n2+1	
 			tmp(1:7,n2) = (/x,y,z,rho,drhox,drhoy,drhoz/)
@@ -366,12 +371,12 @@ contains
   ! estimating gradient of fields of 
   !  rho/delta/normed delta at grid points
   !------------------------------------------
-	subroutine gd_mldprho_chi2s(RSD, AP, cs, changenuminx, chisqlist)
+	subroutine gd_mldprho_chi2s(RSD, AP, cs, changenuminx, chisqlist, dfchisqlist, numchisq)
 		! Dummy
-		integer, intent(in) :: RSD, AP
+		integer, intent(in) :: RSD, AP, numchisq
 		type(chisq_settings) :: cs
 		real(dl), intent(in) :: changenuminx
-		real(dl), intent(out) :: chisqlist(:)
+		real(dl), intent(out) :: chisqlist(numchisq), dfchisqlist(numchisq)
 		! Local
 		real(dl) :: boundary_rmin, boundary_rmax
 		integer :: i, j, k, idrop
@@ -382,6 +387,17 @@ contains
 		integer, allocatable :: markdrop(:)
 		logical :: print_time = .false.
 		real(dl) :: tmp, time0, time1, time2, time3, time4, time5, time6, time7
+		!variables used to estimate mu at different r bins
+		real(dl), allocatable :: r_list(:), muavlist(:), muerlist(:), ravlist(:), muvarlist(:)
+		real(dl) :: rmin, rmax
+		integer :: num_bins
+		!tmp variables used for testing
+		real(dl) :: xyz1,xyz2,r1,r2,tsbedropratio,nowx,nowy,nowz,nowrsq,rmaxsq,invrsq
+
+		if(numchisq.ne.cs%numdrop) then
+			print *, 'ERROR (gd_mldprho_chi2s)! size of chisqlist mismathces than ', cs%numdrop
+			stop
+		endif
 
 		call cpu_time(time0)
 		
@@ -394,19 +410,134 @@ contains
 
 		call cpu_time(time1)		
 		
-		if(size(chisqlist).lt.cs%numdrop) then
-			print *, 'ERROR (gd_mldprho_chi2s)! size of chisqlist less than ', cs%numdrop
-			stop
-		endif
-		
 		n1 = size(rho_list0)
 !		print *, '(gd_mldprho_chi2s) Test C...'
 		allocate(absdrholist(n1),markdrop(n1),reflist(n1))
+		markdrop = 0
 		do i = 1, n1
 			absdrholist(i)=sqrt(drho_list0(1,i)**2.0+drho_list0(2,i)**2.0+drho_list0(3,i)**2.0)
 		enddo
 
-!		print *, '(gd_mldprho_chi2s) Test D...'
+!############################## Commenting testing codes				
+		!further drop (keep only a sub volume)!
+		if(.true.) then
+			print *, '(gd_mldprho_chi2) Further selection from the sample to have intended shape...'
+			xyz1 = 0.0
+			xyz2 = max(gbxmax,gbymax,gbzmax) * (1.7/2.3)
+			rmax = max(gbxmax,gbymax,gbzmax) * (2.1/2.3)
+			rmaxsq = rmax**2.0
+			if(.true.) then
+				print *, 'Check infomation from further drop ..'
+				print *, '  gbxmax, gbymax, gbzmax = ', real(gbxmax), real(gbymax), real(gbzmax)
+				print *, '  gbxmin, gbymin, gbzmin = ', real(gbxmin), real(gbymin), real(gbzmin)
+				print *, '  gbrmin, gbrmax = ', real(gbrmin), real(gbrmax)
+				print *, '  xyz1, xyz2, rmax = ', real(xyz1), real(xyz2), real(rmax)
+			endif
+			do i = 1, size(markdrop)
+				nowx = pos_list0(1,i)
+				nowy = pos_list0(2,i)
+				nowz = pos_list0(3,i)
+				nowrsq = nowx**2.0+nowy**2.0+nowz**2.0
+				if(nowx<0 .or. nowy<0 .or. nowz<0) markdrop(i) = 1 !Dropping negative part
+				
+				! Selecting out a fan
+				if(.false.) then
+!					print *, 'Selecting out a fan'
+					if(nowrsq < rmaxsq) then
+						continue
+					else
+						markdrop(i) = 1
+					endif
+				endif
+				! Selecting out a box
+				if(.false.) then
+!					print *, 'Selecting out a box...'
+					if(nowx<xyz2 .and. nowy<xyz2 .and. nowz<xyz2) then
+						continue
+					else
+						markdrop(i) = 1
+					endif
+				endif
+				! Selecting out a 'inverse Fan'
+				if(.true.) then
+!					print *, 'Selecting out an inversed fan...'
+					invrsq = (nowx-rmax)**2.0+(nowy-rmax)**2.0+(nowz-rmax)**2.0
+					if(invrsq < rmaxsq) then
+						continue
+					else
+						markdrop(i) = 1
+					endif
+				endif
+				! Selecting out a 'sphere'
+				if(.false.) then
+!					print *, 'Selecting out an inversed fan...'
+					nowrsq = (nowx-rmax/2.0)**2.0+(nowy-rmax/2.0)**2.0+(nowz-rmax/2.0)**2.0
+					if(nowrsq < rmaxsq/4.0) then
+						continue
+					else
+						markdrop(i) = 1
+					endif
+				endif
+				
+			enddo
+			! Re-define pos/rho/drho list
+			call drop_pixels2(pos_list0, rho_list0, drho_list0, markdrop, pos_list, rho_list, drho_list)
+			deallocate(pos_list0,rho_list0,drho_list0)
+			n1 = size(rho_list)
+			allocate(pos_list0(1:3,n1),rho_list0(n1),drho_list0(1:3,n1))
+			pos_list0 = pos_list
+			rho_list0 = rho_list
+			drho_list0 = drho_list
+			deallocate(pos_list,rho_list,drho_list)
+			! Re-define absdrholist, markdrop, reflist
+			deallocate(absdrholist,markdrop,reflist)
+			allocate(absdrholist(n1),markdrop(n1),reflist(n1))
+			markdrop = 0
+			do i = 1, n1
+				absdrholist(i)=sqrt(drho_list0(1,i)**2.0+drho_list0(2,i)**2.0+drho_list0(3,i)**2.0)
+			enddo	
+			print *, 'Check minimal of x: ', minval(pos_list0(1,1:n1))
+			print *, 'Check maximal of x: ', maxval(pos_list0(1,1:n1))
+			print *, 'Check minimal of y: ', minval(pos_list0(2,1:n1))
+			print *, 'Check maximal of y: ', maxval(pos_list0(2,1:n1))
+			print *, 'Check minimal of z: ', minval(pos_list0(3,1:n1))
+			print *, 'Check maximal of z: ', maxval(pos_list0(3,1:n1))
+		endif
+
+!###### Commenting testing codes		
+		if(dotsbe) then
+			print *, '(gd_mldprho_chi2s) outputing files for Boundary Effect tests...'
+			call get_mu_from_gradient_list(pos_list0, drho_list0, drho_mu_data)
+			tsbefilestr = trim(adjustl(tsbestr))//'.txt'
+			print *, 'Writing to file ', tsbefilestr
+			open(unit=1,file=tsbefilestr)
+			do i = 1, n1
+				write(1,'(9(e14.7,1x))') pos_list0(1:3,i), rms(pos_list0(1:3,i)), rho_list0(i), drho_list0(1:3,i), drho_mu_data(i)
+			enddo
+			close(1)
+			deallocate(drho_mu_data)
+			! Dropping 60% low dense pixels ...
+			markdrop = 0
+			tsbedropratio = 0.6_dl
+			reflist = rho_list0
+			call mark_drop_pixels(reflist, markdrop, n1, int(0.0*n1)-1, int(n1*(1.0-tsbedropratio)) + 1)
+			reflist = absdrholist
+			call mark_drop_pixels(reflist, markdrop, n1, int(0.0*n1)-1, int(n1*(1.0-tsbedropratio)) + 1)
+			call drop_pixels2(pos_list0, rho_list0, drho_list0, markdrop, pos_list, rho_list, drho_list)
+			call get_mu_from_gradient_list(pos_list, drho_list, drho_mu_data)
+			tsbefilestr = trim(adjustl(tsbestr))//'_dropped.txt'
+			print *, 'Writing to file ', tsbefilestr
+			open(unit=1,file=tsbefilestr)
+			do i = 1, size(rho_list)
+				write(1,'(9(e14.7,1x))') pos_list(1:3,i), rms(pos_list(1:3,i)), rho_list(i), drho_list(1:3,i), drho_mu_data(i)
+			enddo
+			close(1)						
+			deallocate(drho_mu_data,pos_list,rho_list,drho_list)
+			markdrop = 0
+!			stop
+		endif
+!############################## End of testing codes
+		
 		do idrop = 1, cs%numdrop
 			! cycle if no drop
 			if(.not.cs%dropval(idrop) .and. .not.cs%dropdval(idrop)) then
@@ -414,7 +545,6 @@ contains
 				chisqlist(idrop) = chisq_of_mu_data2(drho_mu_data)
 				deallocate(drho_mu_data)
 			else
-				markdrop = 0
 				if(cs%dropval(idrop)) then
 					reflist = rho_list0
 					call mark_drop_pixels(reflist, markdrop, n1,&
@@ -426,7 +556,7 @@ contains
 						int(cs%lowdropdvalratio(idrop)*n1)-1, int((1-cs%highdropdvalratio(idrop))*n1)+1)
 
 				endif
-
+				
 				if(gradfieldprintinfo) then
 					n2 = 0
 					do i = 1, n1
@@ -444,7 +574,33 @@ contains
 				call drop_pixels2(pos_list0, rho_list0, drho_list0, markdrop, pos_list, rho_list, drho_list)
 				call get_mu_from_gradient_list(pos_list, drho_list, drho_mu_data)
 				chisqlist(idrop) = chisq_of_mu_data2(drho_mu_data)
-
+				
+				! chisq from differantial of mu
+				allocate(r_list(size(rho_list)))
+				do i = 1, size(r_list)
+					r_list(i) = sqrt(pos_list(1,i)**2.0+pos_list(2,i)**2.0+pos_list(3,i)**2.0)
+				enddo
+				call find_min_max(r_list, size(r_list), rmin, rmax)
+								
+				num_bins = 2
+				do i = 1, size(drho_mu_data)
+					drho_mu_data(i) = abs(drho_mu_data(i))
+				enddo
+			  	call binned_quan(drho_mu_data, r_list, rmin, rmax, num_bins, &	
+  					muavlist, muerlist, ravlist, muvarlist)
+				dfchisqlist(idrop) = abs(muavlist(2) - muavlist(1))**2.0 / ((muerlist(1)**2.0 + (muerlist(2)**2.0)))
+				if(gradfieldprintinfo .and. .false.) then
+	  				print *
+					print *, 'num_bins: ', num_bins
+					print *, 'rmin/rmax: ', rmin, rmax
+					print *, 'muavlist: ', muavlist
+					print *, 'muerlist: ', muerlist
+					print *, 'ravlist: ', ravlist
+					print *
+					print *, 'chisq of diff mu: ', dfchisqlist(idrop)
+					print *
+				endif
+				deallocate(r_list,muavlist, muerlist, ravlist, muvarlist)
 				deallocate(pos_list,rho_list,drho_list,drho_mu_data)
 !				print *, 'gd_mldprho_chi2s J'
 			endif
@@ -461,7 +617,7 @@ contains
 		gradfieldprintinfo = .false.
 !		print *, '(gd_mldprho_chi2s) Test E...'		
 	end subroutine gd_mldprho_chi2s
-	
+
 
   !------------------------------------------
   ! Mark the pixels that shall be dropped
@@ -633,6 +789,208 @@ contains
 		est_num_in_x = ( (dble(num_halo)/dble(smnum)) * (x2-x1)*(y2-y1)*(z2-z1) / vol_fun(rmin,rmax) )**(1.0_dl/3.0_dl)
   	
   	end function est_num_in_x
+  	
+
+  !------------------------------------------
+  ! estimating gradient of fields of 
+  !  rho/delta/normed delta at grid points
+  !------------------------------------------
+	subroutine gd_mdwei_chi2s(RSD, AP, cs, changenuminx, chisqlist, numchisq)
+		! Dummy
+		integer, intent(in) :: RSD, AP
+		type(chisq_settings) :: cs
+		integer :: numchisq
+		real(dl), intent(in) :: changenuminx
+		real(dl), intent(out) :: chisqlist(numchisq)
+		! Local
+		real(dl) :: boundary_rmin, boundary_rmax, rhomin, rhomean
+		integer :: i, n
+		real(dl), allocatable :: pos_list(:,:), rho_list(:), drho_list(:,:), absdrholist(:), weight(:)
+		real(dl), allocatable :: drho_mu_data(:)
+
+!		print *, 'gdmdwei A-2'
+
+		if(cs%print_info) print *, 'Estimating rho, delta, normed_delta: changenuminx = ', real(changenuminx), '...'
+		call grid_rho_drho_list(RSD, AP, cs, changenuminx, pos_list, rho_list, drho_list, &
+				boundary_rmin, boundary_rmax)
+!		print *, 'gdmdwei A-1'
+		call get_mu_from_gradient_list(pos_list, drho_list, drho_mu_data)
+!		print *, 'gdmdwei A'		
+		n = size(rho_list)
+		allocate(absdrholist(n),weight(n))
+		do i = 1, n
+			absdrholist(i)=sqrt(drho_list(1,i)**2.0+drho_list(2,i)**2.0+drho_list(3,i)**2.0)
+		enddo
+
+!		print *, 'gdmdwei B'
+		! unweighted chisq
+		chisqlist(1) = chisq_of_mu_data2(drho_mu_data)
+		
+		! weighted by 1/rho
+		do i = 1, n
+			weight(i) = 1.0_dl / rho_list(i)
+		enddo
+		
+		chisqlist(2) = weighted_chisq(drho_mu_data, weight, n)
+		
+		! weighted by 1/sqrt(rho)
+		do i = 1, n
+			weight(i) = 1.0_dl / sqrt(rho_list(i))
+		enddo
+		chisqlist(3) = weighted_chisq(drho_mu_data, weight, n)
+				
+		! weighted by 1/(log(rho/rhomin)+1)
+		rhomin = minval(rho_list)
+		do i = 1, n
+			weight(i) = 1.0_dl / (log(rho_list(i)/rhomin)+1.0)
+		enddo
+		chisqlist(4) = weighted_chisq(drho_mu_data, weight, n)
+		
+		! switch from log(<rho>/rho)+1.0 to 1/(log(rho/<rho>)+1) from rho less to larger than <rho>
+		call get_mean_var(rho_list, rhomean)
+		do i = 1, n
+			if(rho_list(i) .le. rhomean) then
+				weight(i) = log(rhomean/rho_list(i)) + 1.0_dl
+			else				
+				weight(i) = 1.0_dl / (log(rho_list(i)/rhomean)+1.0)
+			endif
+		enddo
+		chisqlist(5) = weighted_chisq(drho_mu_data, weight, n)
+		deallocate(pos_list,rho_list,drho_list,absdrholist,weight,drho_mu_data)	
+	end subroutine gd_mdwei_chi2s
+
+  	
+  !------------------------------------------
+  ! estimating gradient of fields of 
+  !  rho/delta/normed delta at grid points
+  !------------------------------------------
+	subroutine gd_mldprho_dschi2s(RSD, AP, cs, changenuminx, chisqlist)
+		! Dummy
+		integer, intent(in) :: RSD, AP
+		type(chisq_settings) :: cs
+		real(dl), intent(in) :: changenuminx
+		real(dl), intent(out) :: chisqlist(:)
+		! Local
+		real(dl) :: boundary_rmin, boundary_rmax
+		integer :: i, j, k, idrop
+		integer :: n, n1, n2
+		real(dl), allocatable :: drho_mu_data(:)
+		real(dl), allocatable :: pos_list0(:,:), rho_list0(:), drho_list0(:,:)
+		real(dl), allocatable :: pos_list(:,:), rho_list(:), drho_list(:,:), absdrholist(:), reflist(:)
+		integer, allocatable :: markdrop(:)
+		logical :: print_time = .false.
+		real(dl) :: tmp, time0, time1, time2, time3, time4, time5, time6, time7
+		!variables used to estimate mu at different r bins
+		real(dl), allocatable :: r_list(:), muavlist(:), muerlist(:), ravlist(:), muvarlist(:)
+		real(dl) :: rmin, rmax
+		integer :: num_bins
+		
+		call cpu_time(time0)
+		
+		if(cs%print_info) print *, 'Estimating rho, delta, normed_delta: changenuminx = ', real(changenuminx), '...'
+
+!		print *, '(gd_mldprho_chi2s) Test A...'
+		call grid_rho_drho_list(RSD, AP, cs, changenuminx, pos_list0, rho_list0, drho_list0, &
+				boundary_rmin, boundary_rmax)
+!		print *, '(gd_mldprho_chi2s) Test B...'
+
+		call cpu_time(time1)		
+		
+		if(size(chisqlist).lt.cs%numdrop) then
+			print *, 'ERROR (gd_mldprho_chi2s)! size of chisqlist less than ', cs%numdrop
+			stop
+		endif
+		
+		n1 = size(rho_list0)
+!		print *, '(gd_mldprho_chi2s) Test C...'
+		allocate(absdrholist(n1),markdrop(n1),reflist(n1))
+		do i = 1, n1
+			absdrholist(i)=sqrt(drho_list0(1,i)**2.0+drho_list0(2,i)**2.0+drho_list0(3,i)**2.0)
+		enddo
+
+!		print *, '(gd_mldprho_chi2s) Test D...'
+		do idrop = 1, cs%numdrop
+			! cycle if no drop
+			if(.not.cs%dropval(idrop) .and. .not.cs%dropdval(idrop)) then
+				call get_mu_from_gradient_list(pos_list0, drho_list0, drho_mu_data)
+				chisqlist(idrop) = chisq_of_mu_data2(drho_mu_data)
+				deallocate(drho_mu_data)
+			else
+				markdrop = 0
+				if(cs%dropval(idrop)) then
+					reflist = rho_list0
+					call mark_drop_pixels(reflist, markdrop, n1,&
+						int(cs%lowdropvalratio(idrop)*n1)-1, int(n1*( 1.0_dl-cs%highdropvalratio(idrop) )) + 1)
+				endif
+				if(cs%dropdval(idrop)) then
+					reflist = absdrholist
+					call mark_drop_pixels(reflist, markdrop, n1,&
+						int(cs%lowdropdvalratio(idrop)*n1)-1, int((1-cs%highdropdvalratio(idrop))*n1)+1)
+
+				endif
+
+				if(gradfieldprintinfo) then
+					n2 = 0
+					do i = 1, n1
+						if(markdrop(i).eq.0) n2 = n2+1
+					enddo
+					if(cs%dropval(idrop)) &
+						write(*,'(1x,A,f6.2,1x,f6.2)') '  Drop rho ratio: low/high  =     ', &
+							cs%lowdropvalratio(idrop), cs%highdropvalratio(idrop)
+					if(cs%dropdval(idrop)) &
+						write(*,'(1x,A,f6.2,1x,f6.2)') '  Drop drho ratio: low/high =     ', &
+							cs%lowdropdvalratio(idrop), cs%highdropdvalratio(idrop)
+					write(*,'(1x,A,i7,f8.5)'), '  left_# / drop_ratio  in drop:        ', n2, (n1-n2)/(n1+0.0)
+				endif
+
+				call drop_pixels2(pos_list0, rho_list0, drho_list0, markdrop, pos_list, rho_list, drho_list)
+				call get_mu_from_gradient_list(pos_list, drho_list, drho_mu_data)
+				chisqlist(idrop) = chisq_of_mu_data2(drho_mu_data)
+!				print *, 'chisq = ', chisqlist(idrop)
+				
+				allocate(r_list(size(rho_list)))
+				do i = 1, size(r_list)
+					r_list(i) = sqrt(pos_list(1,i)**2.0+pos_list(2,i)**2.0+pos_list(3,i)**2.0)
+				enddo
+				call find_min_max(r_list, size(r_list), rmin, rmax)
+								
+				num_bins = 2
+				do i = 1, size(drho_mu_data)
+					drho_mu_data(i) = abs(drho_mu_data(i))
+				enddo
+			  	call binned_quan(drho_mu_data, r_list, rmin, rmax, num_bins, &	
+  					muavlist, muerlist, ravlist, muvarlist)
+				if(gradfieldprintinfo) then
+	  				print *
+					print *, 'num_bins: ', num_bins
+					print *, 'rmin/rmax: ', rmin, rmax
+					print *, 'muavlist: ', muavlist
+					print *, 'muerlist: ', muerlist
+					print *, 'ravlist: ', ravlist
+					print *
+					print *, 'chisq of diff mu: ', chisqlist(idrop)
+					print *
+				endif
+				chisqlist(idrop) = abs(muavlist(2) - muavlist(1))**2.0 / ((muerlist(1)**2.0 + (muerlist(2)**2.0)))
+				
+				deallocate(r_list,muavlist, muerlist, ravlist, muvarlist)
+				deallocate(pos_list,rho_list,drho_list,drho_mu_data)
+!				print *, 'gd_mldprho_chi2s J'
+			endif
+		enddo
+				
+		call cpu_time(time2)		
+
+		deallocate(absdrholist,markdrop,reflist)
+
+		if(print_time .or. gradfieldprintinfo) then
+			print *, '  Time used in grid_rho_drho_list: ', real(time1-time0)
+			print *, '  Time used in drop: ', real(time2-time1)
+			print *
+		endif
+		gradfieldprintinfo = .false.
+!		print *, '(gd_mldprho_chi2s) Test E...'		
+	end subroutine gd_mldprho_dschi2s 	
 
 end module ap_grad_fields	
 	

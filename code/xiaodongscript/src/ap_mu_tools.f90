@@ -191,8 +191,44 @@ contains
 		enddo
 		call get_mean_var(tmp, mumean, muvar)
 		muer = sqrt(muvar) / sqrt(n-1.0)
+!		print *, '(chisq_of_mu_data2): mumean, muer = ', mumean, muer
 		chisq_of_mu_data2 = (mumean-0.5_dl)**2.0/muer**2.0
 	end function chisq_of_mu_data2
+	
+  !------------------------------------------
+  ! another definition of chisq
+  !------------------------------------------	
+	real(dl) function weighted_chisq(mu_data, weight, n)
+		! Dummy
+		real(dl), intent(in) :: mu_data(n), weight(n)
+		integer :: n
+		! Output
+		real(dl) :: sumw, sumwsq, summu, sumwmu, mumean, wmumean, wmean
+		real(dl) :: muvar, wvar, wmuvar 
+		real(dl) :: er
+		integer :: i
+		
+		! weighted mean of mu
+		sumw = 0.0_dl	
+		sumwmu = 0.0_dl
+		do i = 1, n
+			sumw = sumw + weight(i)
+			sumwmu = sumwmu + weight(i)*abs(mu_data(i))
+		enddo
+		wmumean = sumwmu / sumw
+
+		! weighted variance of mu
+		wmuvar = 0.0_dl
+		do i = 1, n
+			wmuvar = wmuvar + weight(i)*(abs(mu_data(i))-wmumean)**2.0 
+			! when calculating weighted variance, also weight each sample
+		enddo
+		wmuvar = wmuvar / sumw
+		
+		! Error Estimator
+		er = sqrt(wmuvar) / sqrt(n-1.0_dl)
+		weighted_chisq = ((wmumean - 0.5_dl)/er)**2.0
+	end function weighted_chisq	
 
 
   !------------------------------------------

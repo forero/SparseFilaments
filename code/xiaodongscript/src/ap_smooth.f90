@@ -10,7 +10,7 @@ use ap_settings_init
 	implicit none
 	
 ! settings of the programe	
-	real(dl) :: dft_ra_ratio = 4.0d0
+	real(dl) :: dft_ra_ratio = 6.0d0
 	
 !	real(dl) :: sep_distance = 17.065
 !	real(dl) :: sd_unit_len = sep_distance * (dble(smooth_num)**(1.0/3.0)) ! unit length used to dividing cells, ...
@@ -21,8 +21,7 @@ use ap_settings_init
 !	character(len=char_len) :: rho_gradient_file_name
 	integer :: gb_num_xyz_mass
 	real(dl), allocatable :: gb_xyz_list(:,:), gb_mass_list(:), gb_bf_mass_list(:), gb_r_list(:)
-	real(dl) :: gbxmin, gbxmax, gbymin, gbymax, gbzmin, gbzmax
-	real(dl) :: gbrmin, gbrmax, gbtotvol
+	real(dl) :: gbtotvol
 	real(dl) :: unit_len
 	integer :: gb_n_cellx, gb_n_celly, gb_n_cellz
 	real(dl) :: gbdeltax, gbdeltay, gbdeltaz
@@ -413,7 +412,7 @@ contains
   			ra_ratio = dft_ra_ratio
   		endif
   		ratio = ra_ratio * (1.0 + dev * 1.5)
-  		requirednum = int(num*ratio)
+  		requirednum = max(int(num*ratio), 40) ! at least 40 halos!!!
 !  		print *, 'ix, iy, iz, dev, ratio, requirednum = ', ix, iy, iz, dev, ratio, requirednum
 		di = 0
 		do while(1.eq.1)

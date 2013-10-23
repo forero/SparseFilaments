@@ -13,9 +13,9 @@ use ap_chisq
 	type(chisq_settings) :: cs
 	character(len=char_len) :: inputfile, outputname, &
 		rhofile, rhoRSDfile, deltafile, deltaRSDfile, ndeltafile, ndeltaRSDfile, str, str2
-	integer :: i, j, n, num_omw, tmpnum
+	integer :: i, j, n, num_omw
 	real(dl), allocatable :: om_w_list(:,:)
-	real(dl), allocatable :: rho_chisqlist(:), rhoRSD_chisqlist(:), rho_dfchisqlist(:), rhoRSD_dfchisqlist(:), tmp(:)
+	real(dl), allocatable :: rho_chisqlist(:), rhoRSD_chisqlist(:), tmp(:)
 !	real(dl) :: rho_chisqlist(gb_numwei), rhoRSD_chisqlist(gb_numwei)
 	real(dl) :: ommin, ommax, wmin, wmax, dom, dw, om, w, time1, time2, timebegin, timeend, drmean, drvar, ratio
 	logical :: auto_num_in_x, weip
@@ -88,12 +88,11 @@ use ap_chisq
 		call cosmo_funs_init()
 		call read_in_halo_data()
 		call init_halo_info()
-		! Tests of the halo data...
+		allocate(tmp(num_halo))
+		do i = 1, num_halo
+			tmp(i) = abs(halo_info(i)%r - halo_info(i)%r_RSD)
+		enddo
 		if(.false.) then
-			allocate(tmp(num_halo))
-			do i = 1, num_halo
-				tmp(i) = abs(halo_info(i)%r - halo_info(i)%r_RSD)
-			enddo
 			open(file='HR3A100w_pos1000_vel_added.txt',unit=1)
 			do i = 1, num_halo
 				ratio = halo_info(i)%r_RSD / halo_info(i)%r
@@ -118,6 +117,12 @@ use ap_chisq
 		gb_chisq_initied = .true.
 	endif
 
+	!settings of smnum
+	if(auto_num_in_x) then
+		cs%num_in_x = floor(est_num_in_x(cs%smnum)+0.5)
+		print *, 'Automatically determine num_in_x = ', cs%num_in_x, '...'
+	endif	
+	
 	str = outputname
 	rhofile = trim(adjustl(str))//'_rho.txt'
 	rhoRSDfile = trim(adjustl(str))//'_rhoRSD.txt'
@@ -132,33 +137,48 @@ use ap_chisq
 	open(unit=1,file=rhofile)
 	open(unit=2,file=rhoRSDfile)
 	
-	allocate(rho_chisqlist(cs%numdrop),rhoRSD_chisqlist(cs%numdrop), &
-		rho_dfchisqlist(cs%numdrop),rhoRSD_dfchisqlist(cs%numdrop))
+	allocate(rho_chisqlist(cs%numdrop),rhoRSD_chisqlist(cs%numdrop))
 		
-!###### Commenting testing codes
-	dotsbe = .true.
-	if(dotsbe) then
-!		str = 'tsbe_fan'
-!		str = 'tsbe_1p7box'
-		str = 'tsbe_invfan'
-!		str = 'tsbe_sphere'
-		tmpnum = gb_num_changenuminx
-		gb_num_changenuminx = 0
-		om = 0.26
-		w  = -1.0
-		cs%has_RSD = .false.
-		tsbestr = trim(adjustl(str))//'_om0p26_noRSD'
-		call gf_mldprho_chi2s(om, w, h_dft, cs, rho_chisqlist, rho_dfchisqlist, cs%numdrop, calc_comvr = .true.)
-		cs%has_RSD = .true.
-		tsbestr = trim(adjustl(str))//'_om0p26_WithRSD'
-		call gf_mldprho_chi2s(om, w, h_dft, cs, rho_chisqlist, rho_dfchisqlist, cs%numdrop, calc_comvr = .true.)
-		dotsbe = .false.
-		gb_num_changenuminx = tmpnum
-		print *, 'Reset gb_num_changnuminx to ', gb_num_changenuminx, '...'
-	endif
-
 	call cpu_time(timebegin)
 	time1 = timebegin
+
+! Test of the programme.... TBA
+	if(.false.) then
+		om = 0.26_dl
+		w  = -1.0_dl
+		gb_omegam 	= om
+		gb_w 		= w
+		gb_h 		= h_dft
+		call de_calc_comovr()
+		do i = 1, num_halo
+			halo_info(i)%r_AP(1) = de_get_comovr(halo_info(i)%z_real)
+			halo_info(i)%r_AP_RSD(1) = de_get_comovr(halo_info(i)%z_obs)
+		enddo
+		print *, 'NO RSD, om, w = ', om, w
+	
+		call gd_mldprho_dschi2s(0, 1, cs, 0.0_dl, rho_chisqlist)
+		print *, 'With RSD, om, w = ', om, w
+		call gd_mldprho_dschi2s(1, 1, cs, 0.0_dl, rho_chisqlist)
+
+		om = 0.03_dl
+		w  = -1.0_dl
+		gb_omegam 	= om
+		gb_w 		= w
+		gb_h 		= h_dft
+		call de_calc_comovr()
+		do i = 1, num_halo
+			halo_info(i)%r_AP(1) = de_get_comovr(halo_info(i)%z_real)
+			halo_info(i)%r_AP_RSD(1) = de_get_comovr(halo_info(i)%z_obs)
+		enddo	
+		print *, 'NO RSD, om, w = ', om, w	
+		call gd_mldprho_dschi2s(0, 1, cs, 0.0_dl, rho_chisqlist)
+		print *, 'With RSD, om, w = ', om, w
+		call gd_mldprho_dschi2s(1, 1, cs, 0.0_dl, rho_chisqlist)
+		stop
+	endif
+!	call gf_mldprho_chi2s(om, w, h_dft, cs, rho_chisqlist, calc_comvr = .true.)
+
+
 
 	print *, 'Scanning with both RSD, no RSD...'
 	do i = 1, num_omw
@@ -170,14 +190,14 @@ use ap_chisq
 		
 		cs%has_RSD = .false.
 		
-		call gf_mldprho_chi2s(om, w, h_dft, cs, rho_chisqlist, rho_dfchisqlist, cs%numdrop, calc_comvr = .true.)
+!		call gf_mldprho_chi2s(om, w, h_dft, cs, rho_chisqlist, calc_comvr = .true.)
 !		call gf_mdwei_chi2s(om, w, h_dft, cs, rho_chisqlist, calc_comvr = .true.)
 
-		write(1,'(<2+cs%numdrop+cs%numdrop>(e14.7,1x))') om, w, rho_chisqlist(1:cs%numdrop), rho_dfchisqlist(1:cs%numdrop)
+		write(1,'(<2+cs%numdrop>(e14.7,1x))') om, w, rho_chisqlist(1:cs%numdrop)
 		
 		cs%has_RSD = .true.
 		
-		call gf_mldprho_chi2s(om, w, h_dft, cs, rhoRSD_chisqlist, rhoRSD_dfchisqlist, cs%numdrop,  calc_comvr = .false.)		
+!		call gf_mldprho_chi2s(om, w, h_dft, cs, rhoRSD_chisqlist, calc_comvr = .false.)		
 !		call gf_mdwei_chi2s(om, w, h_dft, cs, rhoRSD_chisqlist, calc_comvr = .false.)
 		
 		if(gbtp) then
@@ -185,15 +205,13 @@ use ap_chisq
 				(gbtotvol/num_halo)**(1.0/3.0), est_sm_sphe_r(gbtotvol, num_halo, cs%smnum), '  ...'
 		endif
 			
-		write(2,'(<2+cs%numdrop+cs%numdrop>(e14.7,1x))') om, w, rhoRSD_chisqlist(1:cs%numdrop), rhoRSD_dfchisqlist(1:cs%numdrop)
+		write(2,'(<2+cs%numdrop>(e14.7,1x))') om, w, rhoRSD_chisqlist(1:cs%numdrop)
 		
 		call cpu_time(time2)
 		if(gbtp) then
 			write(*,'(A,f10.4)') '  Time used in this step: ', time2-time1
 			write(*,'(A,<cs%numdrop>(f12.7,1x))') '  Chisqs of rho:       ', rho_chisqlist(1:cs%numdrop)
 			write(*,'(A,<cs%numdrop>(f12.7,1x))') '  Chisqs of rho (RSD): ', rhoRSD_chisqlist(1:cs%numdrop)
-			write(*,'(A,<cs%numdrop>(e14.7,1x))') '  DF Chisqs of rho:       ', rho_dfchisqlist(1:cs%numdrop)
-			write(*,'(A,<cs%numdrop>(e14.7,1x))') '  DF Chisqs of rho (RSD): ', rhoRSD_dfchisqlist(1:cs%numdrop)			
 			time1 = time2
 			print *
 		endif
@@ -205,9 +223,6 @@ use ap_chisq
 	
 	print *, 'Total time:     ',  timeend - timebegin
 	print *, 'Total time / n: ', (timeend - timebegin) / (num_omw+0.0)
-
-	deallocate(om_w_list, rho_chisqlist,rhoRSD_chisqlist, &
-		rho_dfchisqlist,rhoRSD_dfchisqlist)
 
 	close(1); close(2); 
 end program ap_main
