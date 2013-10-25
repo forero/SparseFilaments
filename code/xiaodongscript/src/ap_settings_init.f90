@@ -8,6 +8,9 @@ module ap_settings_init
 use ap_cosmo_funs
 
 	implicit none
+
+	real(dl) :: gbxmin, gbxmax, gbymin, gbymax, gbzmin, gbzmax
+	real(dl) :: gbrmin, gbrmax
 	
 !--------------------------------------------------------------------
 !--------------------------------------------------------------------	
@@ -19,11 +22,36 @@ use ap_cosmo_funs
 	! ( 1 ). Halo dat file
 	!----------------------------------
 	
-		!character(char_len), parameter :: halo_data_file = '../../../data/input/MD_fullhalos_z0_max160w.dat'
-		!character(char_len), parameter :: halo_data_file = '../../data/input/MD_fullhalos_z0_1000-1600_shell.dat'
-		character(char_len), parameter :: halo_data_file = '../../data/input/MD_fullhalos_z0_100w.dat'
-		!character(char_len), parameter :: halo_data_file = '../../data/input/MD_fullhalos_z0_330w.dat'
-	
+!		character(char_len), parameter :: halo_data_file = '../../../data/input/MD_fullhalos_z0_max160w.dat'
+!		character(char_len), parameter :: halo_data_file = '../../data/input/MD_fullhalos_z0_1000-1600_shell.dat'
+!		character(char_len), parameter :: halo_data_file = '../../data/input/MD_fullhalos_z0_100w.dat'
+!		character(char_len), parameter :: halo_data_file = '../../data/input/HR3halo100w_pos1000.dat'		
+!		character(char_len), parameter :: halo_data_file = '../../data/input/HR3halo9w_pos1000.dat'		
+!		character(char_len), parameter :: halo_data_file = '../../data/input/HR3halo100w_pos1000_times2.dat'	
+!		character(char_len), parameter :: halo_data_file = '../../data/input/MD_fullhalos_z0_20wBox.dat'
+!		character(char_len), parameter :: halo_data_file = '../../data/input/MD_fullhalos_z0_20wBox_add800.dat'		
+!		character(char_len), parameter :: halo_data_file = '../../data/input/MD_fullhalos_z0_100wBox_add800.dat'
+!		character(char_len), parameter :: halo_data_file = '../../data/input/HR2_20w_add800.dat'			
+!		character(char_len), parameter :: halo_data_file = '../../data/input/HR3halo_20wbox_add800.dat'
+!		character(char_len), parameter :: halo_data_file = '../../data/input/HR3_71w_800to2300box.dat'
+!		character(char_len), parameter :: halo_data_file = '../../data/input/HR3_71w_500to2000box.dat'
+!		character(char_len), parameter :: halo_data_file = '../../data/input/HR3_71w_500to2000boxA.dat'		
+!		character(char_len), parameter :: halo_data_file = '../../data/input/HR3_71w_500to2000boxB.dat'		
+!		character(char_len), parameter :: halo_data_file = '../../data/input/HR3_170w_0to2000box.dat'
+!		character(char_len), parameter :: halo_data_file = '../../data/input/HR3_500to2000shellB.dat'		
+!		character(char_len), parameter :: halo_data_file = '../../data/input/HR3_500to2000shellA.dat'		
+
+!	In order to check the boundary effect, we test a series of boxes...
+!		character(char_len), parameter :: halo_data_file = '../../data/input/HR3_1p7Gpc_100w_boxA.dat'		
+!		character(char_len), parameter :: halo_data_file = '../../data/input/HR3_2p7_1p35_1p35_box.dat'
+!		character(char_len), parameter :: halo_data_file = '../../data/input/HR3_2p1_100w_fan.dat'
+
+!	HR3 LightCone Data
+		character(char_len) :: LClabelChar != '0'
+		character(char_len) :: halo_data_file != '../../data/input/HR3LC'//trim(adjustl(LClabelChar))//'_57w_600to1787.dat'
+!		character(char_len), parameter :: halo_data_file = '../../data/input/'
+!		character(char_len), parameter :: halo_data_file = '../../data/input/'
+				
 	!----------------------------------
 	! ( 2 ). Name of the project.	
 	!----------------------------------
@@ -36,24 +64,23 @@ use ap_cosmo_funs
 	! ( 3 ). Real cosmological parameters	
 	!----------------------------------	
 		
-		real(dl), parameter :: om_dft = 0.27_dl, h_dft = 0.70_dl, w_dft = -1.0_dl
+		real(dl), parameter :: om_dft = 0.26_dl, h_dft = 0.72_dl, w_dft = -1.0_dl
+!		real(dl), parameter :: om_dft = 0.27_dl, h_dft = 0.7_dl, w_dft = -1.0_dl
 	
 	!----------------------------------
 	! ( 4 ). Assumed cosmologies.
 	!----------------------------------	
 		
-		integer, parameter :: num_assumed_cosmo = 3
+		integer, parameter :: num_assumed_cosmo = 1
 		
 		real(dl), parameter :: assumed_cosmo(3,num_assumed_cosmo) = &
-			(/ 0.5_dl,  w_dft, h_dft, & 
-			   0.75_dl, w_dft, h_dft, &
-			   1.0_dl,  w_dft, h_dft   /)
-			   
+			(/ 0.5_dl,  w_dft, h_dft  /)
+						   
 		character(char_len), parameter :: ascos_name1 = 'om_0p5'
 		character(char_len), parameter :: ascos_name2 = 'om_0p75'
 		character(char_len), parameter :: ascos_name3 = 'om_0p1'
 
-		character(char_len), parameter :: assumed_cosmo_name(num_assumed_cosmo) = (/ ascos_name1, ascos_name2, ascos_name3 /)
+		character(char_len), parameter :: assumed_cosmo_name(num_assumed_cosmo) = (/ ascos_name1 /)
 	
 
 !--------------------------------------------------------------------
@@ -87,16 +114,22 @@ contains
   		!------------------------------------------
 		! check whether a point has boundary effect
 		!------------------------------------------
-		logical function has_boundary_effect(x,y,z,max_dist,rmin,rmax,cb_adjust_ratio)
-			real(dl) :: x,y,z,max_dist,rmin,rmax,cb_adjust_ratio,r,dr
-			dr = max_dist*cb_adjust_ratio
+		logical function has_boundary_effect(x,y,z,max_dist,cb_adjust_ratio)
+			!dummy
+			real(dl) :: x,y,z,max_dist,cb_adjust_ratio
+			!local 
+			real(dl) :: r,dr!, extra_correct = 5.0
+			dr = max_dist*cb_adjust_ratio !+ extra_correct
 			r = sqrt(x*x+y*y+z*z)
-			if (r<rmin+dr.or.r>rmax-dr) then
+!			dr = 300.0;
+			if (r<gbrmin+dr.or.r>gbrmax-dr) then
 				has_boundary_effect = .true.; return
 			endif
-			if(x<dr.or.y<dr.or.z<dr) then
+			if(x<gbxmin+dr.or.y<gbymin+dr.or.z<gbzmin+dr &
+				.or.x>gbxmax-dr.or.y>gbymax-dr.or.z>gbzmax-dr) then
 				has_boundary_effect = .true.; return
 			endif
+
 			has_boundary_effect=.false.
 		end function has_boundary_effect
 		

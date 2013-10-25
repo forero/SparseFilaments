@@ -1,22 +1,7 @@
 !####################################
-!This module does statistical an
+! scan chisqs
 !####################################
 
-!		integer :: smnum, num_in_x
-!		logical :: check_boundary = .true.
-!		logical :: print_info = .false.
-!		real(dl) :: cb_adjust_ratio = 1.0_dl, remov_dist_ratio = 1.0_dl
-!		logical :: use_num_density = .true.
-!		integer :: nbins_rhoav = 10
-!		logical :: use_intpl_rho = .true.
-!		logical :: has_RSD = .true.
-!		integer, allocatable :: nbins_list(:)
-
-! List of abondoned settings:
-
-! gb_chisq_method
-! cs%nbins_rhoav
-! cs%nbins_list(:)
 
 program ap_main
 
@@ -26,13 +11,22 @@ use ap_chisq
 	implicit none
 
 	type(chisq_settings) :: cs
+	logical :: auto_num_in_x
 	character(len=char_len) :: inputfile, outputname, &
-		rhofile, rhoRSDfile, deltafile, deltaRSDfile, ndeltafile, ndeltaRSDfile, str, str2
-	integer :: i, j, n, num_omw
-	real(dl), allocatable :: om_w_list(:,:), rho_chisqlist(:), delta_chisqlist(:), ndelta_chisqlist(:),  &
-			rhoRSD_chisqlist(:),deltaRSD_chisqlist(:),ndeltaRSD_chisqlist(:)
+		rhofile, rhoRSDfile, dltfile, dltRSDfile, ndltfile, ndltRSDfile, str, str2
+	integer :: i, j, n, num_omw, tmpnum
+	real(dl), allocatable :: om_w_list(:,:)
+	! chis
+	real(dl), allocatable :: rhochi(:), rhoRSDchi(:), rhodfchi(:), rhoRSDdfchi(:), &
+		dltchi(:), dltRSDchi(:), dltdfchi(:), dltRSDdfchi(:), &
+		ndltchi(:), ndltRSDchi(:), ndltdfchi(:), ndltRSDdfchi(:)
+!	real(dl) :: rhochi(gb_numwei), rhoRSDchi(gb_numwei)
 	real(dl) :: ommin, ommax, wmin, wmax, dom, dw, om, w, time1, time2, timebegin, timeend
-	logical :: auto_num_in_x, scan1, scan2	
+	! tmp variables used for testing
+	real(dl) :: drmean, drvar, ratio
+	real(dl), allocatable :: tmp(:), drho_mu_data(:), ddlt_mu_data(:), dnormed_dlt_mu_data(:)
+	real(dl) :: chisq1, chisq2, chisq3
+	integer :: i_LC
 	
 	i = iargc()
 	
@@ -97,164 +91,164 @@ use ap_chisq
 	enddo
 	close(1)
 
-	print *
-	if (.not. gb_chisq_initied) then
-		call cosmo_funs_init()
-		call read_in_halo_data()
-		call init_halo_info()
-		gb_chisq_initied = .true.
-	endif
+	i_LC = 0
+	write(LClabelChar,*) i_LC
+	halo_data_file = '../../data/input/HR3LC'//trim(adjustl(LClabelChar))//'_57w_600to1787.dat'
 
-	!settings of smnum
-	if(auto_num_in_x) then
-		cs%num_in_x = floor(est_num_in_x(cs%smnum)+0.5)
-		print *, 'Automatically determine num_in_x = ', cs%num_in_x, '...'
-	endif	
+	dotsbe = .false.
+	if(dotsbe) then
+		do i_LC =  0, 26
+			print *
+		
+			write(LClabelChar,*) i_LC
+			halo_data_file = '../../data/input/HR3LC'//trim(adjustl(LClabelChar))//'_57w_600to1787.dat'
+
+			call cosmo_funs_init()
+			call read_in_halo_data()
+			call init_halo_info()
+
+	!###### Commenting testing codes
+			allocate(rhochi(cs%numdrop),rhoRSDchi(cs%numdrop),rhodfchi(cs%numdrop),rhoRSDdfchi(cs%numdrop), &
+				dltchi(cs%numdrop),dltRSDchi(cs%numdrop),dltdfchi(cs%numdrop),dltRSDdfchi(cs%numdrop), &
+				ndltchi(cs%numdrop),ndltRSDchi(cs%numdrop),ndltdfchi(cs%numdrop),ndltRSDdfchi(cs%numdrop))
+	!		str = 'tsbe_fan'
+	!		str = 'tsbe_1p7box'
+	!		str = 'tsbe_invfan'
+	!		str = 'tsbe_sphere'
+			str = 'chisqlike/test_HR3LC'//trim(adjustl(LClabelChar))
+			tmpnum = gb_num_changenuminx
+			gb_num_changenuminx = 0
+			! Right Cosmology
+			print *
+			print *, 'Testing Right Cosmology...'
+			om = 0.26
+			w  = -1.0
+			cs%has_RSD = .false.
+			tsbestr = trim(adjustl(str))//'_om0p26_noRSD'
+			call gf_mldprho_mlchi2s(om, w, h_dft, cs, rhochi, rhodfchi, dltchi, dltdfchi, &
+				ndltchi, ndltdfchi, cs%numdrop, calc_comvr = .true., gvfastmode = .false.)
+			cs%has_RSD = .true.
+			tsbestr = trim(adjustl(str))//'_om0p26_WithRSD'
+			call gf_mldprho_mlchi2s(om, w, h_dft, cs, rhochi, rhodfchi, dltchi, dltdfchi, &
+				ndltchi, ndltdfchi, cs%numdrop, calc_comvr = .true., gvfastmode = .false.)
+			! Large Omegam
+			print *
+			print *, 'Testing Large-Omegam Cosmology...'
+			om = 1.0
+			w  = -1.0
+			cs%has_RSD = .false.
+			tsbestr = trim(adjustl(str))//'_om1p0_noRSD'
+			call gf_mldprho_mlchi2s(om, w, h_dft, cs, rhochi, rhodfchi, dltchi, dltdfchi, &
+				ndltchi, ndltdfchi, cs%numdrop, calc_comvr = .true., gvfastmode = .false.)
+			cs%has_RSD = .true.
+			tsbestr = trim(adjustl(str))//'_om1p0_WithRSD'
+			call gf_mldprho_mlchi2s(om, w, h_dft, cs, rhochi, rhodfchi, dltchi, dltdfchi, &
+				ndltchi, ndltdfchi, cs%numdrop, calc_comvr = .true., gvfastmode = .false.)
+			! Small Omegam
+			print *
+			print *, 'Testing Small-Omegam Cosmology...'
+			om = 0.05
+			w  = -1.0
+			cs%has_RSD = .false.
+			tsbestr = trim(adjustl(str))//'_om0p05_noRSD'
+			call gf_mldprho_mlchi2s(om, w, h_dft, cs, rhochi, rhodfchi, dltchi, dltdfchi, &
+				ndltchi, ndltdfchi, cs%numdrop, calc_comvr = .true., gvfastmode = .false.)
+			cs%has_RSD = .true.
+			tsbestr = trim(adjustl(str))//'_om0p05_WithRSD'
+			call gf_mldprho_mlchi2s(om, w, h_dft, cs, rhochi, rhodfchi, dltchi, dltdfchi, &
+				ndltchi, ndltdfchi, cs%numdrop, calc_comvr = .true., gvfastmode = .false.)
+			deallocate(rhochi,rhoRSDchi,rhodfchi,rhoRSDdfchi,dltchi,&
+				dltRSDchi,dltdfchi,dltRSDdfchi,ndltchi,ndltRSDchi,ndltdfchi,ndltRSDdfchi)
+		enddo
+		dotsbe = .false.
+		gb_num_changenuminx = tmpnum
+		print *, 'Reset gb_num_changnuminx to ', gb_num_changenuminx, '...'
+	endif
 	
-!	stop
-	
+
+	allocate(rhochi(cs%numdrop),rhoRSDchi(cs%numdrop),rhodfchi(cs%numdrop),rhoRSDdfchi(cs%numdrop), &
+		dltchi(cs%numdrop),dltRSDchi(cs%numdrop),dltdfchi(cs%numdrop),dltRSDdfchi(cs%numdrop), &
+		ndltchi(cs%numdrop),ndltRSDchi(cs%numdrop),ndltdfchi(cs%numdrop),ndltRSDdfchi(cs%numdrop))
+
 	str = outputname
 	rhofile = trim(adjustl(str))//'_rho.txt'
 	rhoRSDfile = trim(adjustl(str))//'_rhoRSD.txt'
-!	deltafile = trim(adjustl(str))//'_delta.txt'
-!	deltaRSDfile = trim(adjustl(str))//'_deltaRSD.txt'
-!	ndeltafile = trim(adjustl(str))//'_ndelta.txt'
-!	ndeltaRSDfile = trim(adjustl(str))//'_ndeltaRSD.txt'
+	dltfile = trim(adjustl(str))//'_dlt.txt'
+	dltRSDfile = trim(adjustl(str))//'_dltRSD.txt'
+	ndltfile = trim(adjustl(str))//'_ndlt.txt'
+	ndltRSDfile = trim(adjustl(str))//'_ndltRSD.txt'
 	
 	print *
 	print *, 'Calculating chisqs...'	
 	print *, 'Results saved in the following file:'
 	print *, '     ', trim(adjustl(rhofile))
 	print *, '     ', trim(adjustl(rhoRSDfile))
-!	print *, '     ', trim(adjustl(deltafile))
-!	print *, '     ', trim(adjustl(deltaRSDfile))
-!	print *, '     ', trim(adjustl(ndeltafile))
-!	print *, '     ', trim(adjustl(ndeltaRSDfile))
+	print *, '     ', trim(adjustl(dltfile))
+	print *, '     ', trim(adjustl(dltRSDfile))
+	print *, '     ', trim(adjustl(ndltfile))
+	print *, '     ', trim(adjustl(ndltRSDfile))
 	print *
-	
+
 	open(unit=1,file=rhofile)
 	open(unit=2,file=rhoRSDfile)
-!	open(unit=3,file=deltafile)
-!	open(unit=4,file=deltaRSDfile)
-!	open(unit=5,file=ndeltafile)
-!	open(unit=6,file=ndeltaRSDfile)
+	open(unit=3,file=dltfile)
+	open(unit=4,file=dltRSDfile)
+	open(unit=5,file=ndltfile)
+	open(unit=6,file=ndltRSDfile)
 	
-	allocate(rho_chisqlist(cs%numdrop),delta_chisqlist(cs%numdrop),ndelta_chisqlist(cs%numdrop), &
-		rhoRSD_chisqlist(cs%numdrop),deltaRSD_chisqlist(cs%numdrop),ndeltaRSD_chisqlist(cs%numdrop))
-		
+
+
 	call cpu_time(timebegin)
 	time1 = timebegin
 
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-	scan1 = .false. ! only +RSD scan
-	if(scan1) then
-		print *, 'Warning!!!! Scan of only with RSD!'
-		do i = 1, num_omw
-			om = om_w_list(1,i)
-			w  = om_w_list(2,i)
-
-			if(gbtp) &
-				write(*,'(A,i8,1x,f8.4,1x,f8.4,1x,f7.3,A)') '  Step, om, w, ratio = ', i, real(om), real(w), real(i/(num_omw+0.0)), '...'
-
-			cs%has_RSD = .true.		
-			call gf_mldprho_chi2s(om, w, h_dft, cs, rhoRSD_chisqlist, calc_comvr = .true.)		
-			write(2,'(<2+cs%numdrop>(e14.7,1x))') om, w, rhoRSD_chisqlist(1:cs%numdrop)
-				
-			if(gbtp) then
-				write(*,'(A,2f10.4,A)') '  Mean d_sep / r_sm_sphere = ', &
-					(gbtotvol/num_halo)**(1.0/3.0), est_sm_sphe_r(gbtotvol, num_halo, cs%smnum), '  ...'
-			endif
-		
-			call cpu_time(time2)
-			if(gbtp) then
-				write(*,'(A,f10.4)') '  Time used in this step: ', time2-time1
-				write(*,'(A,<cs%numdrop>(f12.7,1x))') '  Chisqs of rho (RSD): ', rhoRSD_chisqlist(1:cs%numdrop)
-				time1 = time2
-				print *
-			endif
-		enddo
-		stop
-	endif
-	
-	scan2 = .false. ! only no RSD scan
-	if(scan2) then
-		print *, 'Warning!!!! Scan of only no RSD!'
-		do i = 1, num_omw
-			om = om_w_list(1,i)
-			w  = om_w_list(2,i)
-
-			if(gbtp) &
-				write(*,'(A,i8,1x,f8.4,1x,f8.4,1x,f7.3,A)') '  Step, om, w, ratio = ', i, real(om), real(w), real(i/(num_omw+0.0)), '...'
-		
-			cs%has_RSD = .false.
-			call gf_mldprho_chi2s(om, w, h_dft, cs, rho_chisqlist, calc_comvr = .true.)
-			write(1,'(<2+cs%numdrop>(e14.7,1x))') om, w, rho_chisqlist(1:cs%numdrop)
-
-			if(gbtp) then
-				write(*,'(A,2f10.4,A)') '  Mean d_sep / r_sm_sphere = ', &
-					(gbtotvol/num_halo)**(1.0/3.0), est_sm_sphe_r(gbtotvol, num_halo, cs%smnum), '  ...'
-			endif
-		
-			call cpu_time(time2)
-			if(gbtp) then
-				write(*,'(A,f10.4)') '  Time used in this step: ', time2-time1
-				write(*,'(A,<cs%numdrop>(f12.7,1x))') '  Chisqs of rho:       ', rho_chisqlist(1:cs%numdrop)
-				time1 = time2
-				print *
-			endif
-		enddo
-		stop
-	endif
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-	
 	print *, 'Scanning with both RSD, no RSD...'
 	do i = 1, num_omw
 		om = om_w_list(1,i)
 		w  = om_w_list(2,i)
 
-		if(gbtp) &
-			write(*,'(A,i8,1x,f8.4,1x,f8.4,1x,f7.3,A)') '  Step, om, w, ratio = ', i, real(om), real(w), real(i/(num_omw+0.0)), '...'
+		if(gbtp) then
+			write(*,'(A,i8,1x,f8.4,1x,f8.4,1x,f7.3,A)') &
+				'  Step, om, w, ratio = ', i, real(om), real(w), real(i/(num_omw+0.0)), '...'
+		endif
 		
 		cs%has_RSD = .false.
 		
-!		call gradient_chisqs(om, w, h_dft, cs, rho_chisqlist, delta_chisqlist, ndelta_chisqlist, calc_comvr = .true.)
-		call gf_mldprho_chi2s(om, w, h_dft, cs, rho_chisqlist, calc_comvr = .true.)
+		call gf_mldprho_mlchi2s(om, w, h_dft, cs, rhochi, rhodfchi, dltchi, dltdfchi, &
+			ndltchi, ndltdfchi, cs%numdrop, calc_comvr = .true., gvfastmode = .false.)
 
-		write(1,'(<2+cs%numdrop>(e14.7,1x))') om, w, rho_chisqlist(1:cs%numdrop)
-!		write(3,'(<2+cs%numdrop>(e14.7,1x))') om, w, delta_chisqlist(1:cs%numdrop)
-!		write(5,'(<2+cs%numdrop>(e14.7,1x))') om, w, ndelta_chisqlist(1:cs%numdrop)
+		write(1,'(<2+cs%numdrop+cs%numdrop>(e14.7,1x))') om, w, rhochi(1:cs%numdrop), rhodfchi(1:cs%numdrop)
+		write(3,'(<2+cs%numdrop+cs%numdrop>(e14.7,1x))') om, w, dltchi(1:cs%numdrop), dltdfchi(1:cs%numdrop)
+		write(5,'(<2+cs%numdrop+cs%numdrop>(e14.7,1x))') om, w,ndltchi(1:cs%numdrop),ndltdfchi(1:cs%numdrop)
+		
+		print *, 'Chisqs without RSD...'
+		write(*,'(<2+cs%numdrop+cs%numdrop>(f7.2,1x))') om, w, rhochi(1:cs%numdrop), rhodfchi(1:cs%numdrop)
+		write(*,'(<2+cs%numdrop+cs%numdrop>(f7.2,1x))') om, w, dltchi(1:cs%numdrop), dltdfchi(1:cs%numdrop)
+		write(*,'(<2+cs%numdrop+cs%numdrop>(f7.2,1x))') om, w,ndltchi(1:cs%numdrop),ndltdfchi(1:cs%numdrop)
 		
 		cs%has_RSD = .true.
 		
-!		call gradient_chisqs(om, w, h_dft, cs, rhoRSD_chisqlist, deltaRSD_chisqlist, ndeltaRSD_chisqlist, calc_comvr = .false.)
-		call gf_mldprho_chi2s(om, w, h_dft, cs, rhoRSD_chisqlist, calc_comvr = .false.)		
+		call gf_mldprho_mlchi2s(om, w, h_dft, cs, rhoRSDchi, rhoRSDdfchi, dltRSDchi, dltRSDdfchi, &
+			ndltRSDchi, ndltRSDdfchi, cs%numdrop, calc_comvr = .true., gvfastmode = .false.)
 		
 		if(gbtp) then
 			write(*,'(A,2f10.4,A)') '  Mean d_sep / r_sm_sphere = ', &
 				(gbtotvol/num_halo)**(1.0/3.0), est_sm_sphe_r(gbtotvol, num_halo, cs%smnum), '  ...'
 		endif
 			
-		write(2,'(<2+cs%numdrop>(e14.7,1x))') om, w, rhoRSD_chisqlist(1:cs%numdrop)
-!		write(4,'(<2+cs%numdrop>(e14.7,1x))') om, w, deltaRSD_chisqlist(1:cs%numdrop)
-!		write(6,'(<2+cs%numdrop>(e14.7,1x))') om, w, ndeltaRSD_chisqlist(1:cs%numdrop)	
+		write(2,'(<2+cs%numdrop+cs%numdrop>(e14.7,1x))') om, w, rhoRSDchi(1:cs%numdrop), rhoRSDdfchi(1:cs%numdrop)
+		write(4,'(<2+cs%numdrop+cs%numdrop>(e14.7,1x))') om, w, dltRSDchi(1:cs%numdrop), dltRSDdfchi(1:cs%numdrop)
+		write(6,'(<2+cs%numdrop+cs%numdrop>(e14.7,1x))') om, w,ndltRSDchi(1:cs%numdrop),ndltRSDdfchi(1:cs%numdrop)
+
+		print *, 'Chisqs with RSD...'
+		write(*,'(<2+cs%numdrop+cs%numdrop>(f7.2,1x))') om, w, rhoRSDchi(1:cs%numdrop), rhoRSDdfchi(1:cs%numdrop)
+		write(*,'(<2+cs%numdrop+cs%numdrop>(f7.2,1x))') om, w, dltRSDchi(1:cs%numdrop), dltRSDdfchi(1:cs%numdrop)
+		write(*,'(<2+cs%numdrop+cs%numdrop>(f7.2,1x))') om, w,ndltRSDchi(1:cs%numdrop),ndltRSDdfchi(1:cs%numdrop)
 		
 		call cpu_time(time2)
 		if(gbtp) then
 			write(*,'(A,f10.4)') '  Time used in this step: ', time2-time1
-			write(*,'(A,<cs%numdrop>(f12.7,1x))') '  Chisqs of rho:       ', rho_chisqlist(1:cs%numdrop)
-			write(*,'(A,<cs%numdrop>(f12.7,1x))') '  Chisqs of rho (RSD): ', rhoRSD_chisqlist(1:cs%numdrop)
-!			write(*,'(A,<6*cs%numdrop>(f12.7,1x))') '  Chisqs: ', rho_chisqlist(1:cs%numdrop), delta_chisqlist(1:cs%numdrop), &
-!				ndelta_chisqlist(1:cs%numdrop), rhoRSD_chisqlist(1:cs%numdrop), ndeltaRSD_chisqlist(1:cs%numdrop)
 			time1 = time2
 			print *
-		else
-			if(time2 - time1 > 30) then
-				write(*,'(4x,A,i8,1x,f12.7,1x,f6.3,1x,f7.3,A)') ' step, om, w, ratio = ', i, real(om), real(w), real(i/(n+0.0)), '...'
-!			write(*,'(4x,<2+num_nbins>(f8.2,1x))') om, w, rho_chisqlist(1:num_nbins)
-!			write(*,'(4x,<2+num_nbins>(f8.2,1x))') om, w, delta_chisqlist(1:num_nbins)
-!			write(*,'(4x,<2+num_nbins>(f8.2,1x))') om, w, ndelta_chisqlist(1:num_nbins)
-				time1 = time2
-			endif
 		endif
 
 
@@ -263,7 +257,10 @@ use ap_chisq
 	call cpu_time(timeend)
 	
 	print *, 'Total time:     ',  timeend - timebegin
-	print *, 'Total time / n: ', (timeend - timebegin) / (n+0.0)
+	print *, 'Total time / n: ', (timeend - timebegin) / (num_omw+0.0)
 
-	close(1); close(2); close(3); close(4); close(5); close(6)
+	deallocate(om_w_list, rhochi,rhoRSDchi,rhodfchi,rhoRSDdfchi,dltchi,&
+		dltRSDchi,dltdfchi,dltRSDdfchi,ndltchi,ndltRSDchi,ndltdfchi,ndltRSDdfchi)
+
+	close(1); close(2); 
 end program ap_main
