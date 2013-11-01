@@ -93,7 +93,10 @@ use ap_chisq
 
 	i_LC = 0
 	write(LClabelChar,*) i_LC
-	halo_data_file = '../../data/input/HR3LC'//trim(adjustl(LClabelChar))//'_57w_600to1787.dat'
+!	halo_data_file = '../../data/input/MD_fullhalos_z0_100w.dat'
+	halo_data_file = '../../data/input/HR3LCQua'//trim(adjustl(LClabelChar))//'_57w_600to1787.dat'
+!	halo_data_file = '../../data/input/HR3LCQua'//trim(adjustl(LClabelChar))//'_57w_1200to1787.dat'
+
 
 	dotsbe = .false.
 	if(dotsbe) then
@@ -196,8 +199,6 @@ use ap_chisq
 	open(unit=5,file=ndltfile)
 	open(unit=6,file=ndltRSDfile)
 	
-
-
 	call cpu_time(timebegin)
 	time1 = timebegin
 

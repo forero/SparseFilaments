@@ -22,7 +22,8 @@ use ap_mu_tools
 !############################## Commenting testing codes
 	character(len=char_len) :: tsbestr, tsbefilestr
 	logical :: dotsbe
-		
+	
+	
 contains	
 
   !------------------------------------------
@@ -57,7 +58,9 @@ contains
 		do i = 1, n
 			x=pos_list(1,i); y=pos_list(2,i); z=pos_list(3,i)
 			r = sqrt(x*x+y*y+z*z)
-			if(present(pilist)) then
+			if(use_seg) then
+				call nb_seg_list(x,y,z,smnum,val,dvalx,dvaly,dvalz,max_dist)
+			elseif(present(pilist)) then
 				call nb_listinput(x,y,z,smnum,val,dvalx,dvaly,dvalz,pilist(i))
 			else
 				call nb_list(x,y,z,smnum,val,dvalx,dvaly,dvalz,max_dist)
@@ -91,7 +94,7 @@ contains
 		real(dl), allocatable :: tmp(:,:), tmpxyzrlist(:,:,:), tmpxyzrseg(:,:)
 		integer :: i,j, ix, iy, iz, n, n1, n2
 		
-		call do_cell_init2(RSD, AP, real(cs%num_in_x)*(1.0_dl+changenuminx), cs%print_info)
+		call do_cell_init(RSD, AP, real(cs%num_in_x)*(1.0_dl+changenuminx), cs%print_info)
 		
 		if(cs%use_num_density) then
 			gb_mass_list = 1.0_dl
@@ -102,22 +105,19 @@ contains
 		if(cs%check_boundary) then
 			boundary_rmin = gbrmin 
 			boundary_rmax = gbrmax
-			if(cs%print_info) &
-				write(*,'(2x,A,f10.5,2x,f10.5,A)') ' Chenck boundary using rmin, rmax = ', boundary_rmin, boundary_rmax, ' ...'
+			if(cs%print_info) then
+				write(*,'(2x,A,f10.5,2x,f10.5,A)') &
+					' Chenck boundary using rmin, rmax = ', boundary_rmin, boundary_rmax, ' ...'
+			endif
 		endif
 		if(cs%print_info) &
 			print *, '  Estimating rho_list and its gradient...'
 
 		n = gb_n_cellx*gb_n_celly*gb_n_cellz
-		
 		allocate(tmp(7,n))
+		if(present(pilist)) allocate(pilist(n))
 		
-		if(present(pilist)) then
-			allocate(pilist(n))
-		endif
-		
-		! n1 counts how many pixels in shell
-		! n2 counts how many pixels in shell and has no boundary effect
+		! n1 counts how many pixels in shell; n2 counts how many pixels in shell and has no boundary effect
 		n1=0; n2=0;
 		do ix = 1, gb_n_cellx
 		do iy = 1, gb_n_celly
@@ -129,14 +129,15 @@ contains
 				if(r<boundary_rmin.or.r>boundary_rmax) cycle
 			endif
 			n1=n1+1
-			if(present(pilist)) then
+			if(use_seg) then
+				call nb_seg_list(x,y,z,cs%smnum,rho,drhox,drhoy,drhoz,max_dist)
+			elseif(present(pilist)) then
 				call nb_listoutput(x,y,z,cs%smnum,rho,drhox,drhoy,drhoz,max_dist, &
 					pilist(n2+1))
 			else
 				call nb_list0(x,y,z,cs%smnum,rho,drhox,drhoy,drhoz,max_dist)
 			endif
 			if(cs%check_boundary) then
-!				if(has_boundary_effect(x,y,z,max_dist,boundary_rmin,boundary_rmax,gbxmax,gbymax,gbzmax,cs%cb_adjust_ratio)) cycle
 				if(has_boundary_effect(x,y,z,max_dist,cs%cb_adjust_ratio)) cycle
 			endif	
 			n2=n2+1	
@@ -186,20 +187,21 @@ contains
 		integer :: i, j, k, i_sm, binned_i, n, n1, n2, n3, i1, i2, i3
 		integer, allocatable :: markdrop(:)
 		integer :: resmooth_time=0, renorm_time=0
-		logical :: fast_mode = .true., print_time = .false.
+!		logical :: fast_mode = .true.
+		logical :: print_time = .false.
 		real(dl) :: time0, time1, time2, time3, time4, time5, time6, time7
 
 		call cpu_time(time0)
 		
 		if(cs%print_info) print *, 'Estimating rho, delta, normed_delta: changenuminx = ', real(changenuminx), '...'
 
-		if(fast_mode) then
-			call grid_rho_drho_list(RSD, AP, cs, changenuminx, pos_list, rho_list, drho_list, &
-				boundary_rmin, boundary_rmax, pilist)		
-		else
+!		if(fast_mode) then
+!			call grid_rho_drho_list(RSD, AP, cs, changenuminx, pos_list, rho_list, drho_list, &
+!				boundary_rmin, boundary_rmax, pilist)		
+!		else
 			call grid_rho_drho_list(RSD, AP, cs, changenuminx, pos_list, rho_list, drho_list, &
 				boundary_rmin, boundary_rmax)
-		endif
+!		endif
 		call cpu_time(time1)		
 
 		if(.not.gb_dropmethod(1) .and. .not.gb_dropmethod(2)) goto 99 ! no drop
@@ -236,23 +238,23 @@ contains
 
 		call drop_pixels(rho_list, pos_list, drho_list, markdrop)
 		n3 = size(rho_list)
-		if(fast_mode) then
-			j = 0
-			do i = 1, n1
-				if(markdrop(i) .ne. 0) cycle
-				j = j + 1
-				if(i.eq.j) cycle
-				pilist(j)%maxdist = pilist(i)%maxdist
-				do k = 1, cs%smnum
-					pilist(j)%xyzrlist(1:4,k) = pilist(i)%xyzrlist(1:4,k)
-					pilist(j)%indexlist(k) = pilist(i)%indexlist(k)
-				enddo
-			enddo
-			do i = j+1, size(rho_list)
-				deallocate(pilist(i)%xyzrlist)
-				deallocate(pilist(i)%indexlist)
-			enddo
-		endif
+!		if(fast_mode) then
+!			j = 0
+!			do i = 1, n1
+!				if(markdrop(i) .ne. 0) cycle
+!				j = j + 1
+!				if(i.eq.j) cycle
+!				pilist(j)%maxdist = pilist(i)%maxdist
+!				do k = 1, cs%smnum
+!					pilist(j)%xyzrlist(1:4,k) = pilist(i)%xyzrlist(1:4,k)
+!					pilist(j)%indexlist(k) = pilist(i)%indexlist(k)
+!				enddo
+!			enddo
+!			do i = j+1, size(rho_list)
+!				deallocate(pilist(i)%xyzrlist)
+!				deallocate(pilist(i)%indexlist)
+!			enddo
+!		endif
 				
 !		if(gbtp) then
 !			write(*,'(1x,A,i7,f8.5)'), '  left_# / drop_ratio (tot drop):      ', n3, (n1-n3)/(n1+0.0)
@@ -307,11 +309,11 @@ contains
   		
 		call cpu_time(time3)
   		
-  		if(fast_mode) then
-			call get_val_dval_list(cs%smnum, cs%print_info, pos_list, delta_list, ddelta_list, pilist)
-		else
+!  		if(fast_mode) then
+!			call get_val_dval_list(cs%smnum, cs%print_info, pos_list, delta_list, ddelta_list, pilist)
+!		else
 			call get_val_dval_list(cs%smnum, cs%print_info, pos_list, delta_list, ddelta_list)
-		endif
+!		endif
 
 		call get_mu_from_gradient_list(pos_list, ddelta_list, ddelta_mu_data)
 		call cpu_time(time4)
@@ -338,22 +340,22 @@ contains
   			enddo
   		enddo
   		
-  		if(fast_mode) then
-			call get_val_dval_list(cs%smnum, cs%print_info, pos_list, normed_delta_list, dnormed_delta_list,  pilist)
-		else
+!  		if(fast_mode) then
+!			call get_val_dval_list(cs%smnum, cs%print_info, pos_list, normed_delta_list, dnormed_delta_list,  pilist)
+!		else
 			call get_val_dval_list(cs%smnum, cs%print_info, pos_list, normed_delta_list, dnormed_delta_list)
-		endif
+!		endif
 		
 		call get_mu_from_gradient_list(pos_list, dnormed_delta_list, dnormed_delta_mu_data)
 		call cpu_time(time5)
 		deallocate(pos_list,rho_list,drho_list,delta_list,ddelta_list,normed_delta_list,dnormed_delta_list,distance_list)
 		call cpu_time(time6)
-		if(fast_mode) then
-			do i = 1, n3
-				deallocate(pilist(i)%indexlist, pilist(i)%xyzrlist)
-			enddo
-			deallocate(pilist)
-		endif
+!		if(fast_mode) then
+!			do i = 1, n3
+!				deallocate(pilist(i)%indexlist, pilist(i)%xyzrlist)
+!			enddo
+!			deallocate(pilist)
+!		endif
 		call cpu_time(time7)
 
 		if(print_time) then
@@ -658,7 +660,7 @@ contains
 		real(dl) :: rmin, rmax
 		integer :: num_bins
 		!variables used for FAST MODE
-		logical :: fast_mode = .false.
+!		logical :: fast_mode = .false.
 		type(pixelinfo), allocatable :: pilist(:)
 		!tmp variables used for testing
 		real(dl) :: xyz1,xyz2,r1,r2,tsbedropratio,nowx,nowy,nowz,nowrsq,rmaxsq,invrsq
@@ -668,18 +670,18 @@ contains
 			stop
 		endif
 		
-		if(present(gvfastmode)) fast_mode = gvfastmode
+!		if(present(gvfastmode)) fast_mode = gvfastmode
 
 		! Get rho/drho
 		call cpu_time(time0)
 		if(cs%print_info) print *, 'Estimating rho, delta, normed_delta: changenuminx = ', real(changenuminx), '...'
-		if(fast_mode) then
-			call grid_rho_drho_list(RSD, AP, cs, changenuminx, poslist0, rholist0, drholist0, &
-				boundary_rmin, boundary_rmax, pilist)
-		else
+!		if(fast_mode) then
+!			call grid_rho_drho_list(RSD, AP, cs, changenuminx, poslist0, rholist0, drholist0, &
+!				boundary_rmin, boundary_rmax, pilist)
+!		else
 			call grid_rho_drho_list(RSD, AP, cs, changenuminx, poslist0, rholist0, drholist0, &
 				boundary_rmin, boundary_rmax)
-		endif
+!		endif
 
 		! Rescale mass list: normalized according to <rho>(r)
 		n1 = size(rholist0)
@@ -691,22 +693,22 @@ contains
 
 		! Get dlt/ddlt
 		call cpu_time(time1)		
-		if(fast_mode) then
-			call get_val_dval_list(cs%smnum, cs%print_info, poslist0, dltlist0, ddltlist0, pilist)
-		else
+!		if(fast_mode) then
+!			call get_val_dval_list(cs%smnum, cs%print_info, poslist0, dltlist0, ddltlist0, pilist)
+!		else
 			call get_val_dval_list(cs%smnum, cs%print_info, poslist0, dltlist0, ddltlist0)
-		endif
+!		endif
 
 		! Rescal mass list: normalized according to <dlt dlt>(r)
 		call sqvar_mlist(distancelist, dltlist0, n1, cs, 1)
 	
 		! Get ndlt/dndlt
 		call cpu_time(time2)		
-		if(fast_mode) then
-			call get_val_dval_list(cs%smnum, cs%print_info, poslist0, ndltlist0, dndltlist0, pilist)
-		else
+!		if(fast_mode) then
+!			call get_val_dval_list(cs%smnum, cs%print_info, poslist0, ndltlist0, dndltlist0, pilist)
+!		else
 			call get_val_dval_list(cs%smnum, cs%print_info, poslist0, ndltlist0, dndltlist0)
-		endif
+!		endif
 
 		! Preparing for dropping
 		call cpu_time(time3)
@@ -834,12 +836,12 @@ contains
 		enddo
 		call cpu_time(time4)		
 		deallocate(markdrop,refvallist,refdvallist)
-		if(fast_mode) then
-			do i = 1, size(pilist)
-				deallocate(pilist(i)%indexlist, pilist(i)%xyzrlist)
-			enddo
-			deallocate(pilist)
-		endif
+!		if(fast_mode) then
+!			do i = 1, size(pilist)
+!				deallocate(pilist(i)%indexlist, pilist(i)%xyzrlist)
+!			enddo
+!			deallocate(pilist)
+!		endif
 
 		if(print_time .or. gradfieldprintinfo) then
 			print *, '  Time used in grid_rho_drho_list: ', real(time1-time0)

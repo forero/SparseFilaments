@@ -9,8 +9,9 @@ use ap_cosmo_funs
 
 	implicit none
 
-	real(dl) :: gbxmin, gbxmax, gbymin, gbymax, gbzmin, gbzmax
-	real(dl) :: gbrmin, gbrmax
+	real(dl) :: gbgridxmin, gbgridxmax, gbgridymin, gbgridymax, gbgridzmin, gbgridzmax, gbgridrmin, gbgridrmax
+	real(dl) :: gbxmin, gbxmax, gbymin, gbymax, gbzmin, gbzmax, gbrmin, gbrmax
+	real(dl) :: gbvratio = 1.0_dl
 	
 !--------------------------------------------------------------------
 !--------------------------------------------------------------------	
@@ -58,7 +59,7 @@ use ap_cosmo_funs
 	
 		character(char_len), parameter :: halo_data_name = 'MD_halos_160w_1000-1600-shell'
 	
-		character(char_len), parameter :: output_dir = '../../data/output/'//trim(adjustl(halo_data_name))//'/'
+		character(char_len), parameter :: output_dir = '../../data/output/'!//trim(adjustl(halo_data_name))//'/'
 		
 	!----------------------------------
 	! ( 3 ). Real cosmological parameters	
@@ -71,16 +72,16 @@ use ap_cosmo_funs
 	! ( 4 ). Assumed cosmologies.
 	!----------------------------------	
 		
-		integer, parameter :: num_assumed_cosmo = 1
+		integer, parameter :: num_assumed_cosmo = 2
 		
 		real(dl), parameter :: assumed_cosmo(3,num_assumed_cosmo) = &
-			(/ 0.5_dl,  w_dft, h_dft  /)
+			(/ 0.15_dl,  w_dft, h_dft,  0.50_dl,  w_dft, h_dft /)
 						   
-		character(char_len), parameter :: ascos_name1 = 'om_0p5'
-		character(char_len), parameter :: ascos_name2 = 'om_0p75'
+		character(char_len), parameter :: ascos_name1 = 'om_0p05'
+		character(char_len), parameter :: ascos_name2 = 'om_1p0'
 		character(char_len), parameter :: ascos_name3 = 'om_0p1'
 
-		character(char_len), parameter :: assumed_cosmo_name(num_assumed_cosmo) = (/ ascos_name1 /)
+		character(char_len), parameter :: assumed_cosmo_name(num_assumed_cosmo) = (/ ascos_name1, ascos_name2 /)
 	
 
 !--------------------------------------------------------------------
@@ -118,15 +119,19 @@ contains
 			!dummy
 			real(dl) :: x,y,z,max_dist,cb_adjust_ratio
 			!local 
-			real(dl) :: r,dr!, extra_correct = 5.0
-			dr = max_dist*cb_adjust_ratio !+ extra_correct
-			r = sqrt(x*x+y*y+z*z)
-!			dr = 300.0;
-			if (r<gbrmin+dr.or.r>gbrmax-dr) then
+			real(dl) :: r,dr, extra_correct = 15.0
+			if(max_dist .ge. 1.0e5) then
+!				print *, 'Encountered max_dist ', max_dist
 				has_boundary_effect = .true.; return
 			endif
-			if(x<gbxmin+dr.or.y<gbymin+dr.or.z<gbzmin+dr &
-				.or.x>gbxmax-dr.or.y>gbymax-dr.or.z>gbzmax-dr) then
+			dr = max_dist*cb_adjust_ratio + extra_correct
+			r = sqrt(x*x+y*y+z*z)
+!			dr = 300.0;
+			if (abs(r-gbrmin)<dr.or.abs(r-gbrmax)<dr) then
+				has_boundary_effect = .true.; return
+			endif
+			if(abs(x-gbxmin)<dr.or.abs(y-gbymin)<dr.or.abs(z-gbzmin)<dr &
+				.or.abs(x-gbxmax)<dr.or.abs(y-gbymax)<dr.or.abs(z-gbzmax)<dr) then
 				has_boundary_effect = .true.; return
 			endif
 
@@ -224,9 +229,9 @@ contains
 			halo_info(i)%x = halo_data(1,i)
 			halo_info(i)%y = halo_data(2,i)
 			halo_info(i)%z = halo_data(3,i)
-			halo_info(i)%vx = halo_data(4,i)
-			halo_info(i)%vy = halo_data(5,i)
-			halo_info(i)%vz = halo_data(6,i)
+			halo_info(i)%vx = halo_data(4,i)*gbvratio
+			halo_info(i)%vy = halo_data(5,i)*gbvratio
+			halo_info(i)%vz = halo_data(6,i)*gbvratio
 			halo_info(i)%mass = halo_data(7,i)
 			call getSC(halo_info(i)%x,halo_info(i)%y,halo_info(i)%z,halo_info(i)%r,halo_info(i)%theta,halo_info(i)%phi)
 			halo_info(i)%vlos = (halo_info(i)%x*halo_info(i)%vx + halo_info(i)%y*halo_info(i)%vy + halo_info(i)%z*halo_info(i)%vz) / halo_info(i)%r 

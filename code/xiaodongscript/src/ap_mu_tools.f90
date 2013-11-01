@@ -195,6 +195,26 @@ contains
 		chisq_of_mu_data2 = (mumean-0.5_dl)**2.0/muer**2.0
 	end function chisq_of_mu_data2
 	
+	
+  !------------------------------------------
+  ! another definition of chisq
+  !------------------------------------------	
+	real(dl) function chisq_of_mu_data3(mu_data, n)
+		real(dl), intent(in) :: mu_data(n)
+		integer, intent(in) :: n
+		real(dl), allocatable :: tmp(:)
+		real(dl) :: mumean, muvar, muer
+		integer :: i
+		allocate(tmp(n))
+		do i = 1, n
+			tmp(i)= abs(mu_data(i))
+		enddo
+		call get_mean_var(tmp, mumean, muvar)
+		muer = sqrt(muvar) / sqrt(n-1.0)
+!		print *, '(chisq_of_mu_data2): mumean, muer = ', mumean, muer
+		chisq_of_mu_data3 = (mumean-0.5_dl)**2.0/muer**2.0
+	end function chisq_of_mu_data3
+	
   !------------------------------------------
   ! another definition of chisq
   !------------------------------------------	
