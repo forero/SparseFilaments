@@ -100,7 +100,35 @@ module ap_tools
 		enddo
 		close(4321)
 	end subroutine read_in_revfmt
-	
+
+  !-----------------------------------------------------------
+  ! Output a 1-dimensional table to a file.
+  !-----------------------------------------------------------
+	subroutine output_1d(file_name, output_data, n)
+		! Dummy
+		character(LEN=char_len), intent(in) :: file_name
+		real(dl), intent(in) :: output_data(n)
+		integer, intent(in) :: n
+		! Local
+		integer  :: i
+
+		open(unit=60857,name=file_name,err=22)
+
+		do i=1, n
+			write(60857,'(e18.11)',err=33) output_data(i)
+		enddo
+
+		close(60857)
+		return
+
+22		write(*,*) "(output_1d) Error occurs when opening the file ", file_name
+		close(60857)
+		stop
+
+33		write(*,*) "(output_1d) Error occurs when writing into the file ", file_name
+		close(60857)
+		stop
+	end subroutine output_1d	
   !-----------------------------------------------------------
   ! Output a two dimensional table to a file.
   !-----------------------------------------------------------
@@ -493,17 +521,18 @@ module ap_tools
   !---------------------------------------------------------------
   ! Binning quantities according to their r.
   !---------------------------------------------------------------
-  	subroutine binned_quan(quan_val_list, quan_r_list, rmin, rmax, num_bins, &
-  		quan_val_av_list, quan_val_er_list, r_av_list, quan_val_var_list)
-  		real(dl), intent(in) :: quan_val_list(:), quan_r_list(:) 
+  	subroutine binned_quan(quan_val_list, quan_r_list, rmin, rmax, ndat, num_bins, &
+  		quan_val_av_list, quan_val_er_list, r_av_list, quan_val_var_list, quan_medval_list)
+  		! Dummy
+  		real(dl), intent(in) :: quan_val_list(ndat), quan_r_list(ndat) 
   		real(dl), intent(in) :: rmin, rmax
-  		integer, intent(in) :: num_bins
-  		real(dl), allocatable, intent(out) :: quan_val_av_list(:), quan_val_er_list(:), r_av_list(:)
-  		real(dl), allocatable, optional, intent(out) :: quan_val_var_list(:)
-  		real(dl) :: deltar, r, quan_val_av, quan_val_var
-  		integer :: i, n, m, j, binned_i
-  		integer, allocatable :: binned_num_list(:)
-  		type(dy_array), allocatable :: binned_quan_val_list(:), binned_r_list(:)
+  		integer, intent(in) :: ndat, num_bins
+  		real(dl), intent(out) :: quan_val_av_list(num_bins), quan_val_er_list(num_bins), r_av_list(num_bins)
+  		real(dl), optional, intent(out) :: quan_val_var_list(num_bins), quan_medval_list(num_bins)
+  		real(dl) :: deltar, r, quan_val_av, quan_val_var, quanval1, quanval2, quanvalmid
+  		integer :: i, n, m, j, binned_i, numsmaller
+  		integer :: binned_num_list(num_bins)
+  		type(dy_array) :: binned_quan_val_list(num_bins), binned_r_list(num_bins)
   		
   		n = size(quan_val_list)
   		if(size(quan_r_list) .ne. n) then
@@ -512,18 +541,7 @@ module ap_tools
   		endif
   		
   		deltar = (rmax - rmin) / (num_bins + 0.0_dl)
-  		
-  		if(allocated(quan_val_av_list)) deallocate(quan_val_av_list)
-  		if(allocated(quan_val_er_list)) deallocate(quan_val_er_list)
-  		if(allocated(r_av_list)) deallocate(r_av_list)
-		if(allocated(binned_r_list)) deallocate(binned_r_list)
-				
-		allocate(quan_val_av_list(num_bins), quan_val_er_list(num_bins), r_av_list(num_bins), binned_num_list(num_bins), binned_quan_val_list(num_bins), binned_r_list(num_bins))
-		if(present(quan_val_var_list)) then
-			if(allocated(quan_val_var_list)) deallocate(quan_val_var_list)
-			allocate(quan_val_var_list(num_bins))
-		endif
-		
+  				
 		! how many elements in each bin
 		binned_num_list = 0
   		do i = 1, n
@@ -564,7 +582,23 @@ module ap_tools
 				quan_val_var_list(binned_i) = quan_val_var
   			quan_val_er_list(binned_i) = sqrt(quan_val_var) / sqrt(m-1.0)
   			r_av_list(binned_i) = sum(binned_r_list(binned_i)%array) / (m+0.0)
-  		enddo
+  			if(present(quan_medval_list)) then
+  				call find_min_max(binned_quan_val_list(binned_i)%array, m, quanval1, quanval2)
+  				quanvalmid = ( quanval1 + quanval2 ) / 2.0
+  				call count_num_smaller(binned_quan_val_list(binned_i)%array, m, quanvalmid,numsmaller)
+  				do while(abs(numsmaller - m/2) > 2)
+  					if(numsmaller < m/2) then
+  						quanval1 = quanvalmid
+  						quanvalmid = (quanval2+quanvalmid) / 2.0
+  					else
+  						quanval2 = quanvalmid
+  						quanvalmid = (quanval1+quanvalmid) / 2.0
+  					endif
+	  				call count_num_smaller(binned_quan_val_list(binned_i)%array,m,quanvalmid,numsmaller)
+	  			enddo
+	  			quan_medval_list(binned_i) = quanvalmid
+	  		endif
+  		enddo  		
   	end subroutine binned_quan
 
   !---------------------------------------------------------------
@@ -1221,7 +1255,7 @@ module ap_tools
 		enddo
 	end subroutine gelablist2	
 	
- !---------------------------------------------------------------
+  !---------------------------------------------------------------
   ! Count out how many elements are smaller than x
   !---------------------------------------------------------------  		
   	subroutine gelablist3(A,nA,numge,gelablist)
@@ -1303,5 +1337,106 @@ module ap_tools
 				gelablist(j) = i
 			endif
 		enddo
-	end subroutine gelablist3	
+	end subroutine gelablist3
+
+  !---------------------------------------------------------------
+  ! inversion of a matrix
+  !--------------------------------------------------------------- 	
+	subroutine nizhen(aa,b,n)
+		! Dummy
+		real(dl), intent(in) :: aa(n,n)
+		integer, intent(in) :: n
+		real(dl), intent(out) :: b(n,n)
+		! Local
+	 	integer :: i,j,k
+	  	real(dl) :: a(n,n)
+	  	a=aa
+		b=0.0d0
+	  	do i=1,n
+	   		b(i,i)=1
+	  	enddo
+	  	do i=1,n
+	   		b(i,:)=b(i,:)/a(i,i)
+	   		a(i,i:n)=a(i,i:n)/a(i,i) 
+	   		do j=i+1,n     
+	     			do k=1,n   
+	   				b(j,k)=b(j,k)-b(i,k)*a(j,i)
+	 			enddo
+			  	a(j,i:n)=a(j,i:n)-a(i,i:n)*a(j,i)
+			enddo
+		enddo
+	 	do i=n,1,-1
+	  	do j=i-1,1,-1
+	   	do k=1,n
+	    		b(j,k)=b(j,k)-b(i,k)*a(j,i)
+	    	enddo
+	 	enddo
+	  	enddo
+ 	end subroutine nizhen
+ 	
+ 	  	
+  !------------------------------------------
+  ! Polynomial Regression:
+  !  polynomial fitting to data points
+  ! Y(i) = A(1) + A(2)*X(1) + A(3)*X(2)^2 + ... 
+  !        + A(n+1)*X(n)^n
+  !------------------------------------------  	
+	subroutine poly_fit(X,Y,A,ndat,n)
+		! Dummy
+		real(dl), intent(in) :: X(ndat),Y(ndat)
+		integer, intent(in) :: ndat,n
+		real(dl), intent(out) :: A(n+1)
+		! Local
+		real(dl) :: CapX(ndat,n+1), CapMatA(n+1,n+1), CapMatB(n+1,n+1), CapMatC(n+1,ndat)
+		integer :: i,j,k
+		! CapX(i,j) = X(i) ^ (j-1)
+		do i = 1, ndat
+		do j = 1, n+1
+			CapX(i,j) = X(i)**(j-1)
+		enddo
+		enddo
+		! CapMatA = ( CapX^T CapX)
+		do i = 1,n+1
+		do j = 1,n+1
+			CapMatA(i,j) = 0.0_dl
+			do k = 1,ndat
+				CapMatA(i,j) = CapMatA(i,j) + CapX(k,i)*CapX(k,j)
+			enddo
+		enddo
+		enddo
+		! CapMatB = ( CapX^T CapX )^(-1)
+		call nizhen(CapMatA,CapMatB,n+1)
+		! CapMatC = ( CapX^T CapX )^(-1) CapX^T
+		do i = 1, n+1
+		do j = 1, ndat
+			CapMatC(i,j) = 0.0_dl
+			do k = 1, n+1
+				CapMatC(i,j) = CapMatC(i,j) + CapMatB(i,k)*CapX(j,k)
+			enddo
+		enddo
+		enddo
+		! A = ( CapX^T CapX )^(-1) CapX^T Y
+		do i = 1, n+1
+			A(i) = 0.0_dl
+			do j = 1, ndat
+				A(i) = A(i) + CapMatC(i,j)*Y(j)
+			enddo
+		enddo
+  	end subroutine poly_fit
+
+  !------------------------------------------
+  ! Value of a n-th polynomial 
+  !  at some value of x
+  !------------------------------------------   	
+  	real(dl) function poly(x,A,n)
+  		! Dummy
+  		real(dl), intent(in) :: x, A(n+1)
+  		integer, intent(in) :: n
+  		! local
+  		integer :: i
+  		poly = A(1)
+  		do i = 1, n
+  			poly = poly + A(i+1)*x**(i)
+  		enddo
+  	end function poly
 end module ap_tools

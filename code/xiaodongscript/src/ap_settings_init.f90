@@ -1,4 +1,11 @@
 
+! List of settings 
+
+! ap_smooth.f90
+!	logical, public :: fixgridrange = .false.
+!	logical, public :: use_fixmd = .true.
+!	logical, public :: use_seg = .false.
+!	logical, public :: use_realrange = .false.
 
 
 !####################################
@@ -9,9 +16,12 @@ use ap_cosmo_funs
 
 	implicit none
 
-	real(dl) :: gbxmin, gbxmax, gbymin, gbymax, gbzmin, gbzmax
-	real(dl) :: gbrmin, gbrmax
-	
+	real(dl) :: gbgridxmin, gbgridxmax, gbgridymin, gbgridymax, gbgridzmin, gbgridzmax, gbgridrmin, gbgridrmax
+	real(dl) :: gbxmin, gbxmax, gbymin, gbymax, gbzmin, gbzmax, gbrmin, gbrmax
+	real(dl) :: gbrealxmin, gbrealxmax, gbrealymin, gbrealymax, gbrealzmin, gbrealzmax
+	real(dl) :: gbvratio = 1.0_dl
+	logical  :: local_pecu_v = .true.
+	logical  :: dotsbe !TESTING
 !--------------------------------------------------------------------
 !--------------------------------------------------------------------	
 !--  settings of the programme   ------------------------------------
@@ -45,7 +55,10 @@ use ap_cosmo_funs
 !		character(char_len), parameter :: halo_data_file = '../../data/input/HR3_1p7Gpc_100w_boxA.dat'		
 !		character(char_len), parameter :: halo_data_file = '../../data/input/HR3_2p7_1p35_1p35_box.dat'
 !		character(char_len), parameter :: halo_data_file = '../../data/input/HR3_2p1_100w_fan.dat'
-		character(char_len), parameter :: halo_data_file = '../../data/input/HR3_2p5Bigbox.dat'
+
+!	HR3 LightCone Data
+		character(char_len) :: LClabelChar != '0'
+		character(char_len) :: halo_data_file != '../../data/input/HR3LC'//trim(adjustl(LClabelChar))//'_57w_600to1787.dat'
 !		character(char_len), parameter :: halo_data_file = '../../data/input/'
 !		character(char_len), parameter :: halo_data_file = '../../data/input/'
 				
@@ -55,12 +68,13 @@ use ap_cosmo_funs
 	
 		character(char_len), parameter :: halo_data_name = 'MD_halos_160w_1000-1600-shell'
 	
-		character(char_len), parameter :: output_dir = '../../data/output/'//trim(adjustl(halo_data_name))//'/'
+		character(char_len), parameter :: output_dir = '../../data/output/'!//trim(adjustl(halo_data_name))//'/'
 		
 	!----------------------------------
 	! ( 3 ). Real cosmological parameters	
 	!----------------------------------	
-		
+
+!		real(dl), parameter :: om_dft = 0.50_dl, h_dft = 0.72_dl, w_dft = -1.0_dl		
 		real(dl), parameter :: om_dft = 0.26_dl, h_dft = 0.72_dl, w_dft = -1.0_dl
 !		real(dl), parameter :: om_dft = 0.27_dl, h_dft = 0.7_dl, w_dft = -1.0_dl
 	
@@ -68,17 +82,18 @@ use ap_cosmo_funs
 	! ( 4 ). Assumed cosmologies.
 	!----------------------------------	
 		
-		integer, parameter :: num_assumed_cosmo = 1
+		integer, parameter :: num_assumed_cosmo = 2
 		
 		real(dl), parameter :: assumed_cosmo(3,num_assumed_cosmo) = &
-			(/ 0.5_dl,  w_dft, h_dft  /)
+			(/ 0.15_dl,  w_dft, h_dft,  0.50_dl,  w_dft, h_dft /)
 						   
-		character(char_len), parameter :: ascos_name1 = 'om_0p5'
-		character(char_len), parameter :: ascos_name2 = 'om_0p75'
+		character(char_len), parameter :: ascos_name1 = 'om_0p05'
+		character(char_len), parameter :: ascos_name2 = 'om_1p0'
 		character(char_len), parameter :: ascos_name3 = 'om_0p1'
 
-		character(char_len), parameter :: assumed_cosmo_name(num_assumed_cosmo) = (/ ascos_name1 /)
+		character(char_len), parameter :: assumed_cosmo_name(num_assumed_cosmo) = (/ ascos_name1, ascos_name2 /)
 	
+
 
 !--------------------------------------------------------------------
 !--------------------------------------------------------------------	
@@ -115,15 +130,20 @@ contains
 			!dummy
 			real(dl) :: x,y,z,max_dist,cb_adjust_ratio
 			!local 
-			real(dl) :: r,dr, extra_correct = 20.0
-			dr = max_dist*cb_adjust_ratio*1.2 + extra_correct
-			r = sqrt(x*x+y*y+z*z)
-!			dr = 300.0;
-			if (r<gbrmin+dr.or.r>gbrmax-dr) then
+			real(dl) :: r,dr, extra_correct = 15.0
+			if(max_dist .ge. 1.0e5) then
+!				print *, 'Encountered max_dist ', max_dist
 				has_boundary_effect = .true.; return
 			endif
-			if(x<gbxmin+dr.or.y<gbymin+dr.or.z<gbzmin+dr &
-				.or.x>gbxmax-dr.or.y>gbymax-dr.or.z>gbzmax-dr) then
+			dr = max_dist*cb_adjust_ratio + extra_correct
+!			dr = 30.0 ! TESTING			
+			r = sqrt(x*x+y*y+z*z)
+!			dr = 300.0;
+			if (abs(r-gbrmin)<dr.or.abs(r-gbrmax)<dr) then
+				has_boundary_effect = .true.; return
+			endif
+			if(abs(x-gbxmin)<dr.or.abs(y-gbymin)<dr.or.abs(z-gbzmin)<dr &
+				.or.abs(x-gbxmax)<dr.or.abs(y-gbymax)<dr.or.abs(z-gbzmax)<dr) then
 				has_boundary_effect = .true.; return
 			endif
 
@@ -203,6 +223,8 @@ contains
   !------------------------------------------
 	subroutine init_halo_info()
 		integer :: i, i_cosmo
+		real(dl), allocatable :: tmp(:)
+		character(len=char_len) :: outputfile = '~/tmp.txt'
 		
 		if(.not. allocated(halo_data)) then
 			print *, 'ERROR! halo_data not allocated. Unable to initialize halo_info!'
@@ -217,22 +239,60 @@ contains
 		if(allocated(halo_info)) &
 			deallocate(halo_info)
 		allocate(halo_info(num_halo))
+		
+		open(unit=1987,file=outputfile)
+		do i = 1, num_halo
+			read(1987,*) halo_info(i)%z_real
+		enddo
+		close(1987)
+		
 		do i = 1, num_halo
 			halo_info(i)%x = halo_data(1,i)
 			halo_info(i)%y = halo_data(2,i)
 			halo_info(i)%z = halo_data(3,i)
-			halo_info(i)%vx = halo_data(4,i)
-			halo_info(i)%vy = halo_data(5,i)
-			halo_info(i)%vz = halo_data(6,i)
+			halo_info(i)%vx = halo_data(4,i)*gbvratio
+			halo_info(i)%vy = halo_data(5,i)*gbvratio
+			halo_info(i)%vz = halo_data(6,i)*gbvratio
 			halo_info(i)%mass = halo_data(7,i)
 			call getSC(halo_info(i)%x,halo_info(i)%y,halo_info(i)%z,halo_info(i)%r,halo_info(i)%theta,halo_info(i)%phi)
 			halo_info(i)%vlos = (halo_info(i)%x*halo_info(i)%vx + halo_info(i)%y*halo_info(i)%vy + halo_info(i)%z*halo_info(i)%vz) / halo_info(i)%r 
 			! redshifts
-			halo_info(i)%z_real = get_z(halo_info(i)%r)
-			halo_info(i)%z_obs = halo_info(i)%z_real + halo_info(i)%vlos / const_c
+!			halo_info(i)%z_real = get_z(halo_info(i)%r)
+			if(local_pecu_v) then
+				halo_info(i)%vx = (1.0_dl + halo_info(i)%z_real) * halo_info(i)%vx 
+				halo_info(i)%vx = (1.0_dl + halo_info(i)%z_real) * halo_info(i)%vx
+				halo_info(i)%vx = (1.0_dl + halo_info(i)%z_real) * halo_info(i)%vx
+				halo_info(i)%vlos = (1.0_dl + halo_info(i)%z_real) * halo_info(i)%vlos
+			endif
+			halo_info(i)%z_obs = halo_info(i)%z_real + halo_info(i)%vlos / const_c 
 			halo_info(i)%r_RSD = de_get_comovr(halo_info(i)%z_obs)
+			if(mod(i,int(num_halo/15)) .eq. 1) then
+				print *, 'Check r:', i, de_get_comovr(halo_info(i)%z_obs) - ( halo_info(i)%r + halo_info(i)%vlos / Hz(halo_info(i)%z_real) * gb_h )
+			endif
 		enddo
 		
+!		allocate(tmp(num_halo))
+!		do i =1, num_halo
+!			tmp(i) = halo_info(i)%z_real
+!		enddo
+!		call output_1d(outputfile,tmp,num_halo)
+		
+		gbrealxmin = halo_info(1)%x
+		gbrealxmax = halo_info(1)%x
+		gbrealymin = halo_info(1)%y
+		gbrealymax = halo_info(1)%y
+		gbrealzmin = halo_info(1)%z
+		gbrealzmax = halo_info(1)%z
+		
+		do i = 2, num_halo
+			gbrealxmin = min(gbrealxmin, halo_info(i)%x)
+			gbrealxmax = max(gbrealxmax, halo_info(i)%x)
+			gbrealymin = min(gbrealymin, halo_info(i)%y)
+			gbrealymax = max(gbrealymax, halo_info(i)%y)
+			gbrealzmin = min(gbrealzmin, halo_info(i)%z)
+			gbrealzmax = max(gbrealzmax, halo_info(i)%z)
+		enddo			
+
 		do i_cosmo = 1, num_assumed_cosmo
 			gb_omegam 	= assumed_cosmo(1,i_cosmo)
 			gb_w 		= assumed_cosmo(2,i_cosmo)
@@ -244,6 +304,18 @@ contains
 			enddo
 		enddo
 		
+!BEGIN TESTING
+		if(.false.) then
+!			open(unit=1,file='chisqlike_LookAtRSD/MDR1info.dat')
+			open(unit=113,file='chisqlike_LookAtRSD/HR3LCQua0_ComovPecuV_info.dat')
+!			open(unit=1,file='chisqlike_LookAtRSD/HR3LCQua0info.dat')
+			do i = 1, num_halo
+				write(113,'(11(e14.7,1x))') halo_info(i)%x, halo_info(i)%y, halo_info(i)%z, halo_info(i)%r, halo_info(i)%r_RSD-halo_info(i)%r, halo_info(i)%vx, halo_info(i)%vy, halo_info(i)%vz, halo_info(i)%vlos, halo_info(i)%z_real, halo_info(i)%z_obs-halo_info(i)%z_real
+			enddo
+			close(113)
+!			stop
+		endif
+!END TESTING		
 		print *, 'Creating outpu_dir = ', trim(adjustl(output_dir)), '...'
 		call system('mkdir -p '//trim(adjustl(output_dir)))
 	end subroutine init_halo_info
