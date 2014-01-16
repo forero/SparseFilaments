@@ -58,7 +58,7 @@ use ap_structure_count
 	call mpi_comm_size(mpi_comm_world,nproc,ierr)
 	call mpi_comm_rank(mpi_comm_world,myid,ierr)
 !	call system('sleep 12000')
-     do i_LC = 0, 26
+     do i_LC = 0, 0
 	! Settings of data file
 	call mpi_barrier(mpi_comm_world,ierr)
 	write(LClabelChar,*) i_LC;	
@@ -78,7 +78,7 @@ use ap_structure_count
 
 	! using cuts in smooth kernel (ignore nearby halos)
 	gb_do_seg_cut = .true.
-	gb_seg_cut_dist = 8.0_dl 	!!SETTING
+	gb_seg_cut_dist = 0.0_dl 	!!SETTING
 
 	! Settings of vel correct
 	gb_do_vcor = .true.
@@ -96,12 +96,12 @@ use ap_structure_count
 	! Settings of method
 	if(use_mpi) then
 		cs%smnum = 30			!!CHECK
-		cs%num_in_x = 240		!!CHECK
+		cs%num_in_x = 100		!!CHECK
 		use_num_density = .true.	!!CHECK
 		specnamestr = '_use_num_dens_2bins'	!!CHECK
 		gb_num_changenuminx = 0 !!CHECK
 		gb_amp_changenuminx = 0.05_dl
-		num_omw = 1; ommin = 0.26_dl; ommax = 0.26_dl !!CHECK
+		num_omw = 1; ommin = 0.26_dl; ommax = 1.0_dl !!CHECK
 !		num_omw = 60; ommin = -0.1_dl; ommax = 0.785_dl
 !		num_omw = 32; ommin = 0.02_dl; ommax = 0.64_dl
 		output_mu_info = .true. !!CHECK!!!MUST BE FALSE IN CLUSTER
@@ -230,7 +230,7 @@ use ap_structure_count
 		write(*,'(i2,A,f4.1,A,f4.1)') gb_num_vcor, ' r-corrections: vel ested in ', gb_vcor_seg_cut_dist, ' to ', gb_vcor_fixmd
 	endif
 	
-	dotsbe = .false.
+	dotsbe = .true.
 	if(dotsbe) then
 		tsbestr = trim(adjustl(outputname))//'_infos/'
 		str1 = 'mkdir -p '//trim(adjustl(tsbestr)); call system(str1)

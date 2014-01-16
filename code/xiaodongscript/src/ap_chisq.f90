@@ -171,8 +171,10 @@ contains
 						tsbefile = trim(adjustl(tsbefile))//'_droprat'//trim(adjustl(str1))
 						if(RSD.eq.0) then
 							tsbefile = trim(adjustl(tsbefile))//'_NORSD'
-						else
+						elseif(gb_do_vcor.eq..false.) then
 							tsbefile = trim(adjustl(tsbefile))//'_WithRSD'
+						else
+							tsbefile = trim(adjustl(tsbefile))//'_WithRSD_Vcor'
 						endif
 						! Save mu into file
 						file1 = trim(adjustl(tsbefile))//'_mu.txt'
